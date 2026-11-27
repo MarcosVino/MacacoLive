@@ -256,36 +256,116 @@ inline std::wstring ResolveUpdateUrl() {
     return kDefaultUpdateApiUrl;
 }
 
+inline bool GetRedirectVersionFallback(std::wstring& outTag, std::wstring& outDownloadUrl) {
+    outTag.clear();
+    outDownloadUrl.clear();
+
+    HINTERNET hSession = WinHttpOpen(
+        L"MacacoLive-Updater/1.5",
+        WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+        WINHTTP_NO_PROXY_NAME,
+        WINHTTP_NO_PROXY_BYPASS,
+        0);
+    if (!hSession) return false;
+    WinHttpSetTimeouts(hSession, 5000, 6000, 8000, 8000);
+
+    HINTERNET hConnect = WinHttpConnect(hSession, L"github.com", INTERNET_DEFAULT_HTTPS_PORT, 0);
+    if (!hConnect) {
+        WinHttpCloseHandle(hSession);
+        return false;
+    }
+
+    HINTERNET hRequest = WinHttpOpenRequest(
+        hConnect,
+        L"HEAD",
+        L"/MarcosVino/MacacoLive/releases/latest",
+        nullptr,
+        WINHTTP_NO_REFERER,
+        WINHTTP_DEFAULT_ACCEPT_TYPES,
+        WINHTTP_FLAG_SECURE);
+    if (!hRequest) {
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return false;
+    }
+
+    DWORD redirectPolicy = WINHTTP_OPTION_REDIRECT_POLICY_NEVER;
+    WinHttpSetOption(hRequest, WINHTTP_OPTION_REDIRECT_POLICY, &redirectPolicy, sizeof(redirectPolicy));
+
+    bool ok = false;
+    if (WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0) &&
+        WinHttpReceiveResponse(hRequest, nullptr)) {
+
+        wchar_t locBuf[1024]{};
+        DWORD locSize = sizeof(locBuf);
+        if (WinHttpQueryHeaders(
+                hRequest,
+                WINHTTP_QUERY_LOCATION,
+                WINHTTP_HEADER_NAME_BY_INDEX,
+                locBuf,
+                &locSize,
+                WINHTTP_NO_HEADER_INDEX)) {
+            std::wstring loc(locBuf);
+            size_t tagPos = loc.rfind(L"/tag/");
+            if (tagPos != std::wstring::npos) {
+                std::wstring tag = loc.substr(tagPos + 5);
+                if (!tag.empty()) {
+                    outTag = tag;
+                    outDownloadUrl = L"https://github.com/MarcosVino/MacacoLive/releases/download/" + tag + L"/MacacoLive.exe";
+                    ok = true;
+                }
+            }
+        }
+    }
+
+    WinHttpCloseHandle(hRequest);
+    WinHttpCloseHandle(hConnect);
+    WinHttpCloseHandle(hSession);
+    return ok;
+}
+
 inline UpdateInfo CheckForUpdates() {
     UpdateInfo info{};
     std::wstring apiUrl = ResolveUpdateUrl();
     if (apiUrl.empty()) return info;
 
     std::vector<uint8_t> raw;
-    if (!HttpGetBytes(apiUrl, raw, 512 * 1024)) return info;
+    if (HttpGetBytes(apiUrl, raw, 512 * 1024)) {
+        std::string json(reinterpret_cast<const char*>(raw.data()), raw.size());
+        std::string verUtf8 = ExtractJsonFieldUtf8(json, "version");
+        if (verUtf8.empty()) {
+            verUtf8 = ExtractJsonFieldUtf8(json, "tag_name");
+        }
+        std::string dlUtf8 = FindExeDownloadUrl(json);
+        std::string notesUtf8 = ExtractJsonFieldUtf8(json, "notes");
+        if (notesUtf8.empty()) {
+            notesUtf8 = ExtractJsonFieldUtf8(json, "name");
+        }
 
-    std::string json(reinterpret_cast<const char*>(raw.data()), raw.size());
-    std::string verUtf8 = ExtractJsonFieldUtf8(json, "version");
-    if (verUtf8.empty()) {
-        verUtf8 = ExtractJsonFieldUtf8(json, "tag_name");
+        if (!verUtf8.empty() && !dlUtf8.empty()) {
+            std::wstring remoteVer = Utf8ToWide(verUtf8);
+            if (!remoteVer.empty() && (remoteVer[0] == L'v' || remoteVer[0] == L'V')) {
+                remoteVer.erase(0, 1);
+            }
+            info.latestVersion = remoteVer;
+            info.downloadUrl = Utf8ToWide(dlUtf8);
+            info.notes = Utf8ToWide(notesUtf8);
+            info.available = IsNewerVersion(info.latestVersion, info.currentVersion);
+            return info;
+        }
     }
-    std::string dlUtf8 = FindExeDownloadUrl(json);
-    std::string notesUtf8 = ExtractJsonFieldUtf8(json, "notes");
-    if (notesUtf8.empty()) {
-        notesUtf8 = ExtractJsonFieldUtf8(json, "name");
+
+    // Fallback when api.github.com hits unauthenticated IP rate limit (60/hr): read /releases/latest Location header
+    std::wstring tag, dlUrl;
+    if (GetRedirectVersionFallback(tag, dlUrl)) {
+        std::wstring remoteVer = tag;
+        if (!remoteVer.empty() && (remoteVer[0] == L'v' || remoteVer[0] == L'V')) {
+            remoteVer.erase(0, 1);
+        }
+        info.latestVersion = remoteVer;
+        info.downloadUrl = dlUrl;
+        info.available = IsNewerVersion(info.latestVersion, info.currentVersion);
     }
-
-    if (verUtf8.empty() || dlUtf8.empty()) return info;
-
-    std::wstring remoteVer = Utf8ToWide(verUtf8);
-    if (!remoteVer.empty() && (remoteVer[0] == L'v' || remoteVer[0] == L'V')) {
-        remoteVer.erase(0, 1);
-    }
-
-    info.latestVersion = remoteVer;
-    info.downloadUrl = Utf8ToWide(dlUtf8);
-    info.notes = Utf8ToWide(notesUtf8);
-    info.available = IsNewerVersion(info.latestVersion, info.currentVersion);
     return info;
 }
 
