@@ -38,7 +38,7 @@
           <div class="hero-copy">
             <div class="release-line num">
               <span class="dot" aria-hidden="true"></span>
-              <span id="release-meta">Windows 10 e 11 · v1.5.0 · 946 KB</span>
+              <span id="release-meta">Windows 10 e 11 · v1.5.1 · 948 KB</span>
             </div>
 
             <h1>Compartilhe a tela com som limpo para a turma assistir junto.</h1>
@@ -253,6 +253,21 @@
 
     <script>
       (async () => {
+        try {
+          const res = await fetch('./version.json', { cache: 'no-store' });
+          if (res.ok) {
+            const v = await res.json();
+            if (v.version) {
+              const meta = document.getElementById('release-meta');
+              if (meta) meta.textContent = `Windows 10 e 11 · v${v.version} · ~948 KB`;
+              const btn = document.getElementById('dl-btn');
+              if (btn && v.url) btn.href = v.url;
+              const lbl = document.getElementById('dl-label');
+              if (lbl) lbl.textContent = `Baixar MacacoLive v${v.version}`;
+              return;
+            }
+          }
+        } catch {}
         try {
           const res = await fetch(
             'https://api.github.com/repos/MarcosVino/MacacoLive/releases/latest',

@@ -115,6 +115,8 @@ export function App() {
   const [reactions, setReactions] = useState<FloatingReaction[]>([]);
 
   const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updateCheckedMsg, setUpdateCheckedMsg] = useState('');
   const [updating, setUpdating] = useState(false);
   const [updateError, setUpdateError] = useState('');
 
@@ -135,16 +137,26 @@ export function App() {
       if (fs) setSidebarOpen(false);
     });
 
-    const runUpdateCheck = () => {
+    const runUpdateCheck = (manual = false) => {
+      if (manual) {
+        setCheckingUpdate(true);
+        setUpdateCheckedMsg('');
+      }
       void nativeBridge.checkUpdate().then((res) => {
+        if (manual) setCheckingUpdate(false);
         if (res && res.available && res.downloadUrl) {
           setUpdateInfo(res);
+          setUpdateCheckedMsg('');
+        } else if (manual) {
+          setUpdateCheckedMsg(
+            res ? `Já está na última versão (v${res.currentVersion}).` : 'Não foi possível verificar agora.'
+          );
         }
       });
     };
 
-    runUpdateCheck();
-    const updateTimer = window.setInterval(runUpdateCheck, 5 * 60 * 1000);
+    runUpdateCheck(false);
+    const updateTimer = window.setInterval(() => runUpdateCheck(false), 5 * 60 * 1000);
 
     const stopCaptureOnExit = () => {
       void engineRef.current?.stopScreenShare(false);
@@ -311,6 +323,22 @@ export function App() {
       setJoinError(err?.message || 'Não foi possível entrar na sala.');
     } finally {
       setJoining(false);
+    }
+  };
+
+  const handleManualUpdateCheck = async () => {
+    if (checkingUpdate) return;
+    setCheckingUpdate(true);
+    setUpdateCheckedMsg('');
+    const res = await nativeBridge.checkUpdate();
+    setCheckingUpdate(false);
+    if (res && res.available && res.downloadUrl) {
+      setUpdateInfo(res);
+      setUpdateCheckedMsg('');
+    } else {
+      setUpdateCheckedMsg(
+        res ? `Já está na última versão (v${res.currentVersion}).` : 'Não foi possível verificar agora.'
+      );
     }
   };
 
@@ -505,9 +533,23 @@ export function App() {
             )}
           </button>
 
-          <p className="lobby-foot">
-            O vídeo vai direto do PC de quem transmite para quem assiste. A senha criptografa o convite da sala. · v1.5.0
-          </p>
+          <div className="lobby-foot" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <span>
+              Vídeo direto P2P · v1.5.1
+              {updateCheckedMsg ? ` · ${updateCheckedMsg}` : ''}
+            </span>
+            {nativeBridge.isDesktopApp && !updateInfo?.available && (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ height: 28, padding: '0 10px', fontSize: 12 }}
+                disabled={checkingUpdate}
+                onClick={() => void handleManualUpdateCheck()}
+              >
+                {checkingUpdate ? 'Checando...' : 'Checar atualização'}
+              </button>
+            )}
+          </div>
 
           {updateInfo?.available && (
             <div className="update-bar" role="status">
