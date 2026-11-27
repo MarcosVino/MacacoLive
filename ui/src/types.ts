@@ -80,6 +80,27 @@ export interface UpdateCheckResult {
   notes: string;
 }
 
+export interface BananaThrowEvent {
+  id: string;
+  nick: string;
+  targetX: number; // 15..85 percentage
+  targetY: number; // 16..76 percentage
+  startX: number; // -10..110 percentage
+  startY: number; // 85..105 percentage
+  rotation: number;
+  combo: number;
+  ts: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  nickname: string;
+  text: string;
+  ts: number;
+  self?: boolean;
+}
+
 export interface SignalEnvelope {
   id: string;
   from: string;
@@ -93,7 +114,9 @@ export interface SignalEnvelope {
     | 'offer'
     | 'answer'
     | 'ice'
-    | 'reaction';
+    | 'reaction'
+    | 'banana'
+    | 'chat';
   payload: unknown;
   ts: number;
 }

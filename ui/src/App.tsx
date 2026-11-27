@@ -1,17 +1,27 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import type { User } from '@supabase/supabase-js';
+import type { RealtimeChannel, User } from '@supabase/supabase-js';
 import {
+  Bell,
+  BellOff,
+  Camera,
   Check,
   Copy,
   Download,
   Eye,
   EyeOff,
+  Film,
+  Gamepad2,
+  Hash,
   LoaderCircle,
   Lock,
   LogOut,
   Maximize2,
+  MessageSquare,
   Minimize2,
+  MonitorPlay,
   MonitorUp,
+  PanelLeftClose,
+  PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
   Pin,
@@ -20,6 +30,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Shuffle,
+  SlidersHorizontal,
   Square,
   Trash2,
   TriangleAlert,
@@ -29,13 +40,28 @@ import {
   VolumeX,
   WifiOff,
 } from 'lucide-react';
+import { BananaIcon, BananaOverlay } from './components/BananaOverlay';
+import { RoomChat } from './components/RoomChat';
+import { ServerLobby } from './components/ServerLobby';
 import { ShareModal } from './components/ShareModal';
 import { LogoMark } from './Logo';
 import { nativeBridge } from './nativeBridge';
+import { playBananaSound, playChatPop } from './soundEffects';
 import {
+  ChannelPresenceEntry,
+  createServerChannel,
+  createServerWithChannels,
+  deleteServerChannel,
+  fetchServerRoster,
   fetchUserProfileAndRooms,
+  fetchUserServers,
+  joinServerByInvite,
+  leaveOrDeleteServer,
   removeSavedRoom,
   SavedRoomRecord,
+  ServerChannelRecord,
+  ServerMemberRecord,
+  ServerRecord,
   supabase,
   toggleRoomPin,
   updateNickname,
@@ -44,7 +70,9 @@ import {
 import {
   AudioCaptureMode,
   AudioProcessInfo,
+  BananaThrowEvent,
   CaptureSource,
+  ChatMessage,
   MonitorInfo,
   PeerInfo,
   ResolutionPreset,
@@ -53,6 +81,9 @@ import {
   UpdateCheckResult,
 } from './types';
 import { MacacoWebRtcEngine } from './webrtcEngine';
+
+const APP_VERSION = '1.7.0';
+const CONFIRM_REDIRECT_URL = 'https://macacolive.netlify.app/confirm.html';
 
 interface FloatingReaction {
   id: string;
@@ -72,9 +103,11 @@ const DEFAULT_QUALITY: StreamQualityConfig = {
   cascadeRelay: false,
 };
 
-const REACTIONS = ['🍌', '😂', '🔥', '👏', '😮'];
+const REACTIONS = ['😂', '🔥', '👏', '😮'];
 const WATCH_TIMEOUT_MS = 15000;
 const LOCAL_ROOMS_KEY = 'ml_saved_rooms_v1';
+const ACTIVE_SERVER_KEY = 'ml_active_server_v1';
+const MUTE_SFX_KEY = 'ml_mute_sfx_v1';
 
 const plural = new Intl.PluralRules('pt-BR');
 function countLabel(n: number, one: string, other: string) {
@@ -122,8 +155,14 @@ function relativeTimeLabel(iso: string): string {
   return new Date(iso).toLocaleDateString('pt-BR');
 }
 
+function renderChannelKindIcon(kind: ServerChannelRecord['channel_kind']) {
+  if (kind === 'game') return <Gamepad2 size={14} />;
+  if (kind === 'movie') return <Film size={14} />;
+  return <MonitorPlay size={14} />;
+}
+
 export function App() {
-  // Supabase Auth & Saved Rooms ("Discord de Telas")
+  // Supabase Auth & Discord-style Servers + Saved Rooms
   const [user, setUser] = useState<User | null>(null);
   const [authTab, setAuthTab] = useState<'login' | 'signup'>('login');
   const [authEmail, setAuthEmail] = useState('');
@@ -134,6 +173,13 @@ export function App() {
   const [guestMode, setGuestMode] = useState(() => localStorage.getItem('ml_guest') === '1');
   const [savedRooms, setSavedRooms] = useState<SavedRoomRecord[]>(() => loadLocalRooms());
 
+  const [servers, setServers] = useState<ServerRecord[]>([]);
+  const [activeServerId, setActiveServerId] = useState<string>(
+    () => localStorage.getItem(ACTIVE_SERVER_KEY) || 'home'
+  );
+  const [serverRoster, setServerRoster] = useState<ServerMemberRecord[]>([]);
+  const [presenceByKey, setPresenceByKey] = useState<Record<string, ChannelPresenceEntry>>({});
+
   // Room & Joining
   const [inRoom, setInRoom] = useState(false);
   const [joining, setJoining] = useState(false);
@@ -141,6 +187,8 @@ export function App() {
 
   const [nickname, setNickname] = useState(() => localStorage.getItem('ml_nick') || '');
   const [roomCode, setRoomCode] = useState(() => localStorage.getItem('ml_room') || randomRoomName());
+  const [roomDisplayName, setRoomDisplayName] = useState('');
+  const [roomServerId, setRoomServerId] = useState<string | null>(null);
   const [roomPassword, setRoomPassword] = useState('');
 
   const [peers, setPeers] = useState<PeerInfo[]>([]);
@@ -166,11 +214,24 @@ export function App() {
 
   const [volumePct, setVolumePct] = useState(100);
   const [muted, setMuted] = useState(false);
+  const [jokeSoundsMuted, setJokeSoundsMuted] = useState(
+    () => localStorage.getItem(MUTE_SFX_KEY) === '1'
+  );
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarTab, setSidebarTab] = useState<'people' | 'quality'>('people');
+  const [serverRailOpen, setServerRailOpen] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [alwaysOnTop, setAlwaysOnTop] = useState(false);
   const [mouseIdle, setMouseIdle] = useState(false);
+
   const [reactions, setReactions] = useState<FloatingReaction[]>([]);
+  const [bananas, setBananas] = useState<BananaThrowEvent[]>([]);
+  const [latestBanana, setLatestBanana] = useState<BananaThrowEvent | null>(null);
+  const [stageHit, setStageHit] = useState(false);
+
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [unreadChat, setUnreadChat] = useState(false);
 
   const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
@@ -181,23 +242,64 @@ export function App() {
   const engineRef = useRef<MacacoWebRtcEngine | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const idleTimerRef = useRef<number | null>(null);
+  const presenceChanRef = useRef<RealtimeChannel | null>(null);
 
   const gainCtxRef = useRef<AudioContext | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
 
+  const bananaComboRef = useRef<{ count: number; lastAt: number }>({ count: 0, lastAt: 0 });
+  const lastBananaSendRef = useRef(0);
+  const stageHitTimerRef = useRef<number | null>(null);
+  const bannerTimerRef = useRef<number | null>(null);
+
+  const jokeSoundsMutedRef = useRef(jokeSoundsMuted);
+  jokeSoundsMutedRef.current = jokeSoundsMuted;
+
+  const sidebarTabRef = useRef(sidebarTab);
+  sidebarTabRef.current = sidebarTab;
+  const sidebarOpenRef = useRef(sidebarOpen);
+  sidebarOpenRef.current = sidebarOpen;
+
+  const currentServer = useMemo(
+    () => (activeServerId !== 'home' ? servers.find((s) => s.id === activeServerId) ?? null : null),
+    [servers, activeServerId]
+  );
+
+  const roomServer = useMemo(
+    () => (roomServerId ? servers.find((s) => s.id === roomServerId) ?? null : null),
+    [servers, roomServerId]
+  );
+
   const syncAccountData = async (currentUser: User | null) => {
     if (!currentUser) {
       setSavedRooms(loadLocalRooms());
+      setServers([]);
+      setServerRoster([]);
+      setPresenceByKey({});
       return;
     }
     try {
-      const { nickname: cloudNick, rooms } = await fetchUserProfileAndRooms(currentUser.id);
+      const [{ nickname: cloudNick, rooms }, srvList] = await Promise.all([
+        fetchUserProfileAndRooms(currentUser.id),
+        fetchUserServers(),
+      ]);
       if (cloudNick) {
         setNickname(cloudNick);
         localStorage.setItem('ml_nick', cloudNick);
       }
       setSavedRooms(rooms);
+      setServers(srvList);
+
+      const savedSel = localStorage.getItem(ACTIVE_SERVER_KEY);
+      if (savedSel && savedSel !== 'home' && srvList.some((s) => s.id === savedSel)) {
+        setActiveServerId(savedSel);
+      } else if (srvList.length > 0 && (!savedSel || !srvList.some((s) => s.id === savedSel))) {
+        setActiveServerId(srvList[0].id);
+        localStorage.setItem(ACTIVE_SERVER_KEY, srvList[0].id);
+      } else {
+        setActiveServerId('home');
+      }
     } catch {}
   };
 
@@ -218,6 +320,89 @@ export function App() {
       sub.subscription.unsubscribe();
     };
   }, []);
+
+  // Load server roster when active server changes
+  const watchedPresenceServerId = inRoom && roomServerId ? roomServerId : currentServer?.id || null;
+
+  useEffect(() => {
+    if (!user || !watchedPresenceServerId) {
+      setServerRoster([]);
+      setPresenceByKey({});
+      return;
+    }
+    void fetchServerRoster(watchedPresenceServerId).then(setServerRoster);
+  }, [user?.id, watchedPresenceServerId]);
+
+  // Realtime Presence per active server so friends see who is online & AO VIVO in each channel
+  useEffect(() => {
+    if (!user || !watchedPresenceServerId) {
+      if (presenceChanRef.current) {
+        void supabase.removeChannel(presenceChanRef.current);
+        presenceChanRef.current = null;
+      }
+      return;
+    }
+
+    const ch = supabase.channel(`srv-presence:${watchedPresenceServerId}`, {
+      config: { presence: { key: user.id } },
+    });
+    presenceChanRef.current = ch;
+
+    const buildPayload = (): ChannelPresenceEntry => ({
+      userId: user.id,
+      nickname: nickname.trim() || 'Macaco',
+      channelRoomCode: inRoom && roomServerId === watchedPresenceServerId ? roomCode : null,
+      isStreaming: inRoom && roomServerId === watchedPresenceServerId && Boolean(localStream),
+      updatedAt: Date.now(),
+    });
+
+    ch.on('presence', { event: 'sync' }, () => {
+      const state = ch.presenceState<ChannelPresenceEntry>();
+      const next: Record<string, ChannelPresenceEntry> = {};
+      for (const [key, list] of Object.entries(state)) {
+        if (Array.isArray(list) && list.length > 0) {
+          next[key] = list[list.length - 1];
+        }
+      }
+      setPresenceByKey(next);
+    });
+
+    ch.on('presence', { event: 'join' }, ({ key }) => {
+      setServerRoster((prev) => {
+        if (prev.some((m) => m.user_id === key)) return prev;
+        void fetchServerRoster(watchedPresenceServerId).then(setServerRoster);
+        return prev;
+      });
+    });
+
+    ch.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        void ch.track(buildPayload());
+      }
+    });
+
+    return () => {
+      if (presenceChanRef.current === ch) {
+        presenceChanRef.current = null;
+      }
+      void supabase.removeChannel(ch);
+    };
+  }, [user?.id, watchedPresenceServerId]);
+
+  // Update presence state whenever channel/streaming state changes without resubscribing
+  useEffect(() => {
+    const ch = presenceChanRef.current;
+    if (!user || !ch || !watchedPresenceServerId) return;
+    void ch
+      .track({
+        userId: user.id,
+        nickname: nickname.trim() || 'Macaco',
+        channelRoomCode: inRoom && roomServerId === watchedPresenceServerId ? roomCode : null,
+        isStreaming: inRoom && roomServerId === watchedPresenceServerId && Boolean(localStream),
+        updatedAt: Date.now(),
+      })
+      .catch(() => {});
+  }, [user?.id, nickname, inRoom, roomCode, roomServerId, localStream, watchedPresenceServerId]);
 
   useEffect(() => {
     nativeBridge.init();
@@ -346,23 +531,108 @@ export function App() {
   };
 
   useEffect(() => {
-    if (nativeBridge.isDesktopApp) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'F11') {
+      const target = e.target as HTMLElement | null;
+      const isTyping =
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable);
+
+      if (!nativeBridge.isDesktopApp) {
+        if (e.key === 'F11') {
+          e.preventDefault();
+          void toggleFullscreen();
+          return;
+        }
+        if (e.key === 'Escape' && isFullscreen) {
+          void toggleFullscreen(false);
+          return;
+        }
+      }
+
+      if (inRoom && !isTyping && !shareModalOpen && (e.key === 'b' || e.key === 'B')) {
         e.preventDefault();
-        void toggleFullscreen();
-      } else if (e.key === 'Escape' && isFullscreen) {
-        void toggleFullscreen(false);
+        void throwBanana();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isFullscreen]);
+  }, [inRoom, isFullscreen, shareModalOpen]);
 
   const pushReaction = (nick: string, emoji: string) => {
     const id = crypto.randomUUID();
     setReactions((prev) => [...prev.slice(-5), { id, nick, emoji }]);
     window.setTimeout(() => setReactions((prev) => prev.filter((r) => r.id !== id)), 3100);
+  };
+
+  const handleIncomingBanana = (ev: BananaThrowEvent) => {
+    playBananaSound(ev.combo, jokeSoundsMutedRef.current);
+    setBananas((prev) => [...prev.slice(-13), ev]);
+    setLatestBanana(ev);
+    setStageHit(false);
+    requestAnimationFrame(() => setStageHit(true));
+
+    if (stageHitTimerRef.current) window.clearTimeout(stageHitTimerRef.current);
+    stageHitTimerRef.current = window.setTimeout(() => setStageHit(false), 240);
+
+    if (bannerTimerRef.current) window.clearTimeout(bannerTimerRef.current);
+    bannerTimerRef.current = window.setTimeout(() => setLatestBanana(null), 2250);
+
+    window.setTimeout(() => {
+      setBananas((prev) => prev.filter((item) => item.id !== ev.id));
+    }, 2550);
+  };
+
+  const throwBanana = async () => {
+    const now = Date.now();
+    if (now - lastBananaSendRef.current < 180) return;
+    lastBananaSendRef.current = now;
+
+    if (now - bananaComboRef.current.lastAt < 3200) {
+      bananaComboRef.current.count += 1;
+    } else {
+      bananaComboRef.current.count = 1;
+    }
+    bananaComboRef.current.lastAt = now;
+
+    const fromLeft = Math.random() > 0.5;
+    const ev: BananaThrowEvent = {
+      id: crypto.randomUUID(),
+      nick: nickname.trim() || 'Você',
+      targetX: 18 + Math.random() * 64,
+      targetY: 18 + Math.random() * 54,
+      startX: fromLeft ? -8 : 108,
+      startY: 85 + Math.random() * 18,
+      rotation: Math.round(-26 + Math.random() * 52),
+      combo: bananaComboRef.current.count,
+      ts: now,
+    };
+
+    handleIncomingBanana(ev);
+    await engineRef.current?.sendBanana(ev);
+  };
+
+  const handleIncomingChat = (msg: ChatMessage) => {
+    setChatMessages((prev) => [...prev.slice(-99), msg]);
+    if (!sidebarOpenRef.current || sidebarTabRef.current !== 'people') {
+      setUnreadChat(true);
+    }
+    playChatPop(jokeSoundsMutedRef.current);
+  };
+
+  const sendChat = async (text: string) => {
+    const msg: ChatMessage = {
+      id: crypto.randomUUID(),
+      senderId: engineRef.current?.selfId || 'self',
+      nickname: nickname.trim() || 'Você',
+      text,
+      ts: Date.now(),
+      self: true,
+    };
+    setChatMessages((prev) => [...prev.slice(-99), msg]);
+    await engineRef.current?.sendChatMessage(msg);
   };
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
@@ -380,7 +650,10 @@ export function App() {
         const { data, error } = await supabase.auth.signUp({
           email,
           password: authPassword,
-          options: { data: { nickname: cleanNick } },
+          options: {
+            data: { nickname: cleanNick },
+            emailRedirectTo: CONFIRM_REDIRECT_URL,
+          },
         });
         if (error) throw error;
         setNickname(cleanNick);
@@ -390,7 +663,7 @@ export function App() {
           setGuestMode(false);
           localStorage.removeItem('ml_guest');
         } else {
-          setAuthSuccess('Conta criada. Confirme o link no seu e-mail e depois faça login.');
+          setAuthSuccess('Conta criada! Confirme pelo link no seu e-mail e depois faça login.');
           setAuthTab('login');
         }
       } else {
@@ -415,14 +688,15 @@ export function App() {
     setAuthPassword('');
     setGuestMode(false);
     localStorage.removeItem('ml_guest');
+    setActiveServerId('home');
   };
 
-  const recordRoomHistory = async (code: string, pass: string) => {
+  const recordRoomHistory = async (code: string, pass: string, label?: string) => {
     const now = new Date().toISOString();
     const existing = savedRooms.find((r) => r.room_code === code);
     const entry: SavedRoomRecord = {
       room_code: code,
-      room_label: existing?.room_label || code,
+      room_label: label || existing?.room_label || code,
       room_password: pass,
       is_pinned: existing?.is_pinned ?? false,
       last_joined_at: now,
@@ -441,16 +715,66 @@ export function App() {
     }
   };
 
-  const enterRoom = async (targetCode: string, targetPass: string) => {
+  const teardownCurrentRoom = async () => {
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    if (sourceNodeRef.current) {
+      try {
+        sourceNodeRef.current.disconnect();
+      } catch {}
+      sourceNodeRef.current = null;
+    }
+    if (localStream) {
+      localStream.getTracks().forEach((t) => {
+        try {
+          t.enabled = false;
+          t.stop();
+        } catch {}
+      });
+    }
+
+    const engine = engineRef.current;
+    engineRef.current = null;
+
+    setShareModalOpen(false);
+    setLocalStream(null);
+    setShowLocalPreview(false);
+    setRemoteStream(null);
+    setWatchTarget(null);
+    setStats(null);
+    setPeers([]);
+    setChatMessages([]);
+    setBananas([]);
+    setLatestBanana(null);
+    setUnreadChat(false);
+
+    if (engine) {
+      try {
+        await engine.leaveRoom();
+      } catch {}
+    }
+  };
+
+  const enterRoom = async (
+    targetCode: string,
+    targetPass: string,
+    displayLabel?: string,
+    serverId: string | null = null
+  ) => {
     const room = targetCode.trim();
     if (!room) return;
 
     const nick = nickname.trim() || `Macaco ${Math.floor(10 + Math.random() * 89)}`;
     setNickname(nick);
     setRoomCode(room);
+    setRoomDisplayName(displayLabel || room);
+    setRoomServerId(serverId);
     setRoomPassword(targetPass);
     localStorage.setItem('ml_nick', nick);
-    localStorage.setItem('ml_room', room);
+    if (!serverId) {
+      localStorage.setItem('ml_room', room);
+    }
 
     setJoining(true);
     setJoinError('');
@@ -468,18 +792,30 @@ export function App() {
           onStatsUpdated: setStats,
           onBrokerStatus: setBrokerCount,
           onReaction: pushReaction,
+          onBanana: handleIncomingBanana,
+          onChatMessage: handleIncomingChat,
         },
         quality
       );
       engineRef.current = engine;
       await engine.joinRoom(nick, room, targetPass);
       setInRoom(true);
-      void recordRoomHistory(room, targetPass);
+      if (!serverId) {
+        void recordRoomHistory(room, targetPass, displayLabel);
+      } else if (user) {
+        void updateNickname(user.id, nick);
+      }
     } catch (err: any) {
       setJoinError(err?.message || 'Não foi possível entrar na sala.');
     } finally {
       setJoining(false);
     }
+  };
+
+  const handleSwitchChannel = async (ch: ServerChannelRecord, srv: ServerRecord) => {
+    if (joining || ch.room_code === roomCode) return;
+    await teardownCurrentRoom();
+    await enterRoom(ch.room_code, '', ch.name, srv.id);
   };
 
   const handleJoinRoomForm = (e: React.FormEvent) => {
@@ -505,6 +841,62 @@ export function App() {
     setSavedRooms(next);
     saveLocalRooms(next);
     if (user) await removeSavedRoom(user.id, roomCodeToDelete);
+  };
+
+  const handleSelectServer = (id: string) => {
+    setActiveServerId(id);
+    localStorage.setItem(ACTIVE_SERVER_KEY, id);
+  };
+
+  const handleCreateServer = async (name: string, accentColor: string) => {
+    const created = await createServerWithChannels(name, accentColor);
+    setServers((prev) => [...prev, created]);
+    handleSelectServer(created.id);
+  };
+
+  const handleJoinByInvite = async (inviteCode: string) => {
+    const joined = await joinServerByInvite(inviteCode);
+    const all = await fetchUserServers();
+    setServers(all);
+    handleSelectServer(joined.id);
+  };
+
+  const handleCreateChannel = async (
+    serverId: string,
+    name: string,
+    kind: 'stream' | 'game' | 'movie'
+  ) => {
+    if (!user) return;
+    const srv = servers.find((s) => s.id === serverId);
+    const ch = await createServerChannel(
+      serverId,
+      name,
+      kind,
+      user.id,
+      srv ? srv.channels.length : 0
+    );
+    setServers((prev) =>
+      prev.map((s) => (s.id === serverId ? { ...s, channels: [...s.channels, ch] } : s))
+    );
+  };
+
+  const handleDeleteChannel = async (ch: ServerChannelRecord) => {
+    await deleteServerChannel(ch.id);
+    setServers((prev) =>
+      prev.map((s) =>
+        s.id === ch.server_id
+          ? { ...s, channels: s.channels.filter((c) => c.id !== ch.id) }
+          : s
+      )
+    );
+  };
+
+  const handleLeaveOrDeleteServer = async (srv: ServerRecord) => {
+    if (!user) return;
+    await leaveOrDeleteServer(srv, user.id);
+    const remaining = servers.filter((s) => s.id !== srv.id);
+    setServers(remaining);
+    handleSelectServer(remaining[0]?.id || 'home');
   };
 
   const handleManualUpdateCheck = async () => {
@@ -537,45 +929,12 @@ export function App() {
   };
 
   const handleLeaveRoom = async () => {
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    if (sourceNodeRef.current) {
-      try {
-        sourceNodeRef.current.disconnect();
-      } catch {}
-      sourceNodeRef.current = null;
-    }
-    if (localStream) {
-      localStream.getTracks().forEach((t) => {
-        try {
-          t.enabled = false;
-          t.stop();
-        } catch {}
-      });
-    }
-
-    const engine = engineRef.current;
-    engineRef.current = null;
-
-    setShareModalOpen(false);
-    setLocalStream(null);
-    setShowLocalPreview(false);
-    setRemoteStream(null);
-    setWatchTarget(null);
-    setStats(null);
-    setPeers([]);
+    await teardownCurrentRoom();
+    setRoomServerId(null);
     setInRoom(false);
-
     try {
       if (isFullscreen) await toggleFullscreen(false);
     } catch {}
-
-    if (engine) {
-      try {
-        await engine.leaveRoom();
-      } catch {}
-    }
   };
 
   const startShareWithConfig = async (cfg: StreamQualityConfig) => {
@@ -620,10 +979,47 @@ export function App() {
     await nativeBridge.setFullscreen(next);
   };
 
+  const toggleAlwaysOnTop = async () => {
+    const next = await nativeBridge.setAlwaysOnTop(!alwaysOnTop);
+    setAlwaysOnTop(next);
+  };
+
+  const toggleJokeSoundsMuted = () => {
+    setJokeSoundsMuted((prev) => {
+      const next = !prev;
+      localStorage.setItem(MUTE_SFX_KEY, next ? '1' : '0');
+      return next;
+    });
+  };
+
+  const takeSnapshot = () => {
+    const v = videoRef.current;
+    if (!v || v.videoWidth === 0 || v.videoHeight === 0) return;
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = v.videoWidth;
+      canvas.height = v.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+      const url = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `macacolive-${Date.now()}.png`;
+      a.click();
+    } catch {}
+  };
+
   const copyInvite = async () => {
-    const lines = [`Sala do MacacoLive: ${roomCode.trim()}`];
-    if (roomPassword.trim()) lines.push(`Senha: ${roomPassword.trim()}`);
-    await navigator.clipboard.writeText(lines.join('\n'));
+    if (roomServer) {
+      await navigator.clipboard.writeText(
+        `Entre no servidor "${roomServer.name}" (#${roomDisplayName}) no MacacoLive!\nCódigo do convite: ${roomServer.invite_code}`
+      );
+    } else {
+      const lines = [`Sala do MacacoLive: ${roomCode.trim()}`];
+      if (roomPassword.trim()) lines.push(`Senha: ${roomPassword.trim()}`);
+      await navigator.clipboard.writeText(lines.join('\n'));
+    }
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
   };
@@ -633,7 +1029,7 @@ export function App() {
     await engineRef.current?.sendReaction(emoji);
   };
 
-  /* ---------------- Lobby / Account Hub ---------------- */
+  /* ---------------- Lobby / Discord Hub ---------------- */
   if (!inRoom) {
     const showAuthPanel = !user && !guestMode;
 
@@ -700,42 +1096,159 @@ export function App() {
         </header>
 
         <main className="lobby-content">
-          <div className="lobby-grid">
-            {/* Left card: Login OR Join Room */}
-            {showAuthPanel ? (
-              <form className="lobby-card view-enter" onSubmit={handleAuthSubmit}>
-                <header className="lobby-head">
-                  <h1>Sua conta na tropa</h1>
-                  <p>Entre ou crie sua conta para salvar as salas que você frequenta.</p>
-                </header>
+          {user ? (
+            <ServerLobby
+              user={user}
+              nickname={nickname}
+              onNicknameChange={(n) => {
+                setNickname(n);
+                localStorage.setItem('ml_nick', n);
+              }}
+              servers={servers}
+              activeServerId={activeServerId}
+              onSelectServer={handleSelectServer}
+              serverRoster={serverRoster}
+              presenceByKey={presenceByKey}
+              savedRooms={savedRooms}
+              roomCode={roomCode}
+              onRoomCodeChange={setRoomCode}
+              roomPassword={roomPassword}
+              onRoomPasswordChange={setRoomPassword}
+              onRandomRoom={() => setRoomCode(randomRoomName())}
+              joining={joining}
+              joinError={joinError}
+              onJoinChannel={(ch, srv) => void enterRoom(ch.room_code, '', ch.name, srv.id)}
+              onJoinQuickRoom={(code, pass, label) => void enterRoom(code, pass, label, null)}
+              onTogglePin={(r) => void handleTogglePin(r)}
+              onRemoveRoom={(code) => void handleRemoveRoom(code)}
+              onCreateServer={handleCreateServer}
+              onJoinByInvite={handleJoinByInvite}
+              onCreateChannel={handleCreateChannel}
+              onDeleteChannel={handleDeleteChannel}
+              onLeaveOrDeleteServer={handleLeaveOrDeleteServer}
+              relativeTimeLabel={relativeTimeLabel}
+            />
+          ) : (
+            <div className="lobby-grid">
+              {showAuthPanel ? (
+                <form className="lobby-card view-enter" onSubmit={handleAuthSubmit}>
+                  <header className="lobby-head">
+                    <h1>Sua conta na tropa</h1>
+                    <p>Entre para montar servidores estilo Discord e salvar suas salas.</p>
+                  </header>
 
-                <div className="segmented" role="tablist">
+                  <div className="segmented" role="tablist">
+                    <button
+                      type="button"
+                      className="seg"
+                      aria-pressed={authTab === 'login'}
+                      onClick={() => {
+                        setAuthTab('login');
+                        setAuthError('');
+                      }}
+                    >
+                      Entrar
+                    </button>
+                    <button
+                      type="button"
+                      className="seg"
+                      aria-pressed={authTab === 'signup'}
+                      onClick={() => {
+                        setAuthTab('signup');
+                        setAuthError('');
+                      }}
+                    >
+                      Criar conta
+                    </button>
+                  </div>
+
+                  <div className="lobby-fields">
+                    {authTab === 'signup' && (
+                      <label className="field">
+                        <span className="field-label">Apelido</span>
+                        <input
+                          className="input"
+                          placeholder="Como a turma te chama"
+                          value={nickname}
+                          onChange={(e) => setNickname(e.target.value)}
+                          maxLength={40}
+                          required
+                        />
+                      </label>
+                    )}
+
+                    <label className="field">
+                      <span className="field-label">E-mail</span>
+                      <input
+                        type="email"
+                        className="input"
+                        placeholder="voce@exemplo.com"
+                        value={authEmail}
+                        onChange={(e) => setAuthEmail(e.target.value)}
+                        required
+                        autoFocus
+                      />
+                    </label>
+
+                    <label className="field">
+                      <span className="field-label">Senha</span>
+                      <input
+                        type="password"
+                        className="input"
+                        placeholder="Mínimo 6 caracteres"
+                        value={authPassword}
+                        onChange={(e) => setAuthPassword(e.target.value)}
+                        minLength={6}
+                        required
+                      />
+                    </label>
+                  </div>
+
+                  {authError && (
+                    <div className="inline-error" role="alert">
+                      <TriangleAlert size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+                      <span>{authError}</span>
+                    </div>
+                  )}
+
+                  {authSuccess && (
+                    <div className="inline-ok" role="status">
+                      <Check size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+                      <span>{authSuccess}</span>
+                    </div>
+                  )}
+
+                  <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={authLoading}>
+                    {authLoading ? (
+                      <>
+                        <LoaderCircle size={16} className="spin" /> Aguarde
+                      </>
+                    ) : authTab === 'signup' ? (
+                      'Criar conta'
+                    ) : (
+                      'Entrar'
+                    )}
+                  </button>
+
                   <button
                     type="button"
-                    className="seg"
-                    aria-pressed={authTab === 'login'}
+                    className="btn btn-secondary btn-block"
                     onClick={() => {
-                      setAuthTab('login');
-                      setAuthError('');
+                      setGuestMode(true);
+                      localStorage.setItem('ml_guest', '1');
                     }}
                   >
-                    Entrar
+                    Continuar sem conta
                   </button>
-                  <button
-                    type="button"
-                    className="seg"
-                    aria-pressed={authTab === 'signup'}
-                    onClick={() => {
-                      setAuthTab('signup');
-                      setAuthError('');
-                    }}
-                  >
-                    Criar conta
-                  </button>
-                </div>
+                </form>
+              ) : (
+                <form className="lobby-card view-enter" onSubmit={handleJoinRoomForm}>
+                  <header className="lobby-head">
+                    <h1>Entrar em uma sala</h1>
+                    <p>Crie ou entre numa sala para transmitir tela e som direto aos amigos.</p>
+                  </header>
 
-                <div className="lobby-fields">
-                  {authTab === 'signup' && (
+                  <div className="lobby-fields">
                     <label className="field">
                       <span className="field-label">Apelido</span>
                       <input
@@ -743,245 +1256,154 @@ export function App() {
                         placeholder="Como a turma te chama"
                         value={nickname}
                         onChange={(e) => setNickname(e.target.value)}
-                        maxLength={40}
-                        required
+                        maxLength={60}
+                        autoFocus
                       />
                     </label>
-                  )}
 
-                  <label className="field">
-                    <span className="field-label">E-mail</span>
-                    <input
-                      type="email"
-                      className="input"
-                      placeholder="voce@exemplo.com"
-                      value={authEmail}
-                      onChange={(e) => setAuthEmail(e.target.value)}
-                      required
-                      autoFocus
-                    />
-                  </label>
-
-                  <label className="field">
-                    <span className="field-label">Senha</span>
-                    <input
-                      type="password"
-                      className="input"
-                      placeholder="Mínimo 6 caracteres"
-                      value={authPassword}
-                      onChange={(e) => setAuthPassword(e.target.value)}
-                      minLength={6}
-                      required
-                    />
-                  </label>
-                </div>
-
-                {authError && (
-                  <div className="inline-error" role="alert">
-                    <TriangleAlert size={16} style={{ flexShrink: 0, marginTop: 1 }} />
-                    <span>{authError}</span>
-                  </div>
-                )}
-
-                {authSuccess && (
-                  <div className="inline-ok" role="status">
-                    <Check size={16} style={{ flexShrink: 0, marginTop: 1 }} />
-                    <span>{authSuccess}</span>
-                  </div>
-                )}
-
-                <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={authLoading}>
-                  {authLoading ? (
-                    <>
-                      <LoaderCircle size={16} className="spin" /> Aguarde
-                    </>
-                  ) : authTab === 'signup' ? (
-                    'Criar conta'
-                  ) : (
-                    'Entrar'
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-block"
-                  onClick={() => {
-                    setGuestMode(true);
-                    localStorage.setItem('ml_guest', '1');
-                  }}
-                >
-                  Continuar sem conta
-                </button>
-              </form>
-            ) : (
-              <form className="lobby-card view-enter" onSubmit={handleJoinRoomForm}>
-                <header className="lobby-head">
-                  <h1>Entrar em uma sala</h1>
-                  <p>Crie ou entre numa sala para transmitir tela e som direto aos amigos.</p>
-                </header>
-
-                <div className="lobby-fields">
-                  <label className="field">
-                    <span className="field-label">Apelido</span>
-                    <input
-                      className="input"
-                      placeholder="Como a turma te chama"
-                      value={nickname}
-                      onChange={(e) => setNickname(e.target.value)}
-                      maxLength={60}
-                      autoFocus
-                    />
-                  </label>
-
-                  <div className="field">
-                    <label className="field-label" htmlFor="room">
-                      Sala
-                      <span className="field-hint">Todos entram com o mesmo nome</span>
-                    </label>
-                    <div className="input-row">
-                      <input
-                        id="room"
-                        className="input"
-                        value={roomCode}
-                        onChange={(e) => setRoomCode(e.target.value)}
-                        maxLength={48}
-                        required
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-icon"
-                        style={{ width: 40, height: 40 }}
-                        title="Sortear outro nome"
-                        aria-label="Sortear outro nome de sala"
-                        onClick={() => setRoomCode(randomRoomName())}
-                      >
-                        <Shuffle size={16} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <label className="field">
-                    <span className="field-label">
-                      Senha
-                      <span className="field-hint">Opcional</span>
-                    </span>
-                    <input
-                      type="password"
-                      className="input"
-                      placeholder="Sem senha, entra quem souber o nome"
-                      value={roomPassword}
-                      onChange={(e) => setRoomPassword(e.target.value)}
-                    />
-                  </label>
-                </div>
-
-                {joinError && (
-                  <div className="inline-error" role="alert">
-                    <TriangleAlert size={16} style={{ flexShrink: 0, marginTop: 1 }} />
-                    <span>{joinError}</span>
-                  </div>
-                )}
-
-                <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={joining}>
-                  {joining ? (
-                    <>
-                      <LoaderCircle size={16} className="spin" /> Conectando
-                    </>
-                  ) : (
-                    'Entrar na sala'
-                  )}
-                </button>
-              </form>
-            )}
-
-            {/* Right card: Saved / Recent Rooms (Discord-like server/channel list) */}
-            <section className="lobby-card">
-              <header className="lobby-head">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <h2>Suas salas</h2>
-                  <span className="field-hint num">
-                    {user ? 'Sincronizado na conta' : 'Salvo neste PC'}
-                  </span>
-                </div>
-                <p>
-                  {user
-                    ? 'Clique para voltar em 1 segundo para as salas que você entrou por último.'
-                    : 'Entre na sua conta para sincronizar essas salas em qualquer PC.'}
-                </p>
-              </header>
-
-              {savedRooms.length === 0 ? (
-                <div className="empty-note">
-                  Nenhuma sala salva ainda. Assim que você entrar em uma sala, ela fica aqui no seu histórico.
-                </div>
-              ) : (
-                <div className="saved-rooms-list">
-                  {savedRooms.map((r, idx) => (
-                    <div
-                      key={r.room_code}
-                      className="room-item item-enter"
-                      style={{ animationDelay: `${Math.min(idx * 35, 180)}ms` }}
-                    >
-                      <button
-                        type="button"
-                        className="room-item-main"
-                        disabled={joining}
-                        onClick={() => void enterRoom(r.room_code, r.room_password || '')}
-                      >
-                        <span className="room-item-title">
-                          <span className="truncate">{r.room_label || r.room_code}</span>
-                          {r.room_password && <Lock size={12} color="var(--text-3)" />}
-                        </span>
-                        <span className="room-item-sub num">
-                          {r.is_pinned ? 'Fixada · ' : ''}
-                          {relativeTimeLabel(r.last_joined_at)}
-                        </span>
-                      </button>
-
-                      <div className="room-item-actions">
+                    <div className="field">
+                      <label className="field-label" htmlFor="room">
+                        Sala
+                        <span className="field-hint">Todos entram com o mesmo nome</span>
+                      </label>
+                      <div className="input-row">
+                        <input
+                          id="room"
+                          className="input"
+                          value={roomCode}
+                          onChange={(e) => setRoomCode(e.target.value)}
+                          maxLength={48}
+                          required
+                        />
                         <button
                           type="button"
-                          className="btn btn-icon"
-                          style={{ width: 30, height: 30 }}
-                          onClick={() => void handleTogglePin(r)}
-                          title={r.is_pinned ? 'Desafixar' : 'Fixar no topo'}
-                          aria-label={r.is_pinned ? 'Desafixar sala' : 'Fixar sala'}
+                          className="btn btn-secondary btn-icon"
+                          style={{ width: 40, height: 40 }}
+                          title="Sortear outro nome"
+                          aria-label="Sortear outro nome de sala"
+                          onClick={() => setRoomCode(randomRoomName())}
                         >
-                          {r.is_pinned ? (
-                            <PinOff size={14} color="var(--banana)" />
-                          ) : (
-                            <Pin size={14} />
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-icon"
-                          style={{ width: 30, height: 30 }}
-                          onClick={() => void handleRemoveRoom(r.room_code)}
-                          title="Remover do histórico"
-                          aria-label="Remover sala do histórico"
-                        >
-                          <Trash2 size={14} />
+                          <Shuffle size={16} />
                         </button>
                       </div>
                     </div>
-                  ))}
-                </div>
+
+                    <label className="field">
+                      <span className="field-label">
+                        Senha
+                        <span className="field-hint">Opcional</span>
+                      </span>
+                      <input
+                        type="password"
+                        className="input"
+                        placeholder="Sem senha, entra quem souber o nome"
+                        value={roomPassword}
+                        onChange={(e) => setRoomPassword(e.target.value)}
+                      />
+                    </label>
+                  </div>
+
+                  {joinError && (
+                    <div className="inline-error" role="alert">
+                      <TriangleAlert size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+                      <span>{joinError}</span>
+                    </div>
+                  )}
+
+                  <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={joining}>
+                    {joining ? (
+                      <>
+                        <LoaderCircle size={16} className="spin" /> Conectando
+                      </>
+                    ) : (
+                      'Entrar na sala'
+                    )}
+                  </button>
+                </form>
               )}
 
-              {showAuthPanel && (
-                <div className="lobby-fields" style={{ paddingTop: 8, borderTop: '1px solid var(--line)' }}>
-                  <span className="field-hint">
-                    Quer só entrar rápido? Clique em <strong>Continuar sem conta</strong> ao lado ou escolha uma sala salva acima.
-                  </span>
-                </div>
-              )}
-            </section>
-          </div>
+              <section className="lobby-card">
+                <header className="lobby-head">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <h2>Suas salas</h2>
+                    <span className="field-hint num">Salvo neste PC</span>
+                  </div>
+                  <p>Entre na sua conta para sincronizar servidores e salas em qualquer PC.</p>
+                </header>
 
-          <div className="lobby-foot">
+                {savedRooms.length === 0 ? (
+                  <div className="empty-note">
+                    Nenhuma sala salva ainda. Assim que você entrar em uma sala, ela fica aqui no seu histórico.
+                  </div>
+                ) : (
+                  <div className="saved-rooms-list">
+                    {savedRooms.map((r, idx) => (
+                      <div
+                        key={r.room_code}
+                        className="room-item item-enter"
+                        style={{ animationDelay: `${Math.min(idx * 35, 180)}ms` }}
+                      >
+                        <button
+                          type="button"
+                          className="room-item-main"
+                          disabled={joining}
+                          onClick={() => void enterRoom(r.room_code, r.room_password || '', r.room_label)}
+                        >
+                          <span className="room-item-title">
+                            <span className="truncate">{r.room_label || r.room_code}</span>
+                            {r.room_password && <Lock size={12} color="var(--text-3)" />}
+                          </span>
+                          <span className="room-item-sub num">
+                            {r.is_pinned ? 'Fixada · ' : ''}
+                            {relativeTimeLabel(r.last_joined_at)}
+                          </span>
+                        </button>
+
+                        <div className="room-item-actions">
+                          <button
+                            type="button"
+                            className="btn btn-icon"
+                            style={{ width: 30, height: 30 }}
+                            onClick={() => void handleTogglePin(r)}
+                            title={r.is_pinned ? 'Desafixar' : 'Fixar no topo'}
+                            aria-label={r.is_pinned ? 'Desafixar sala' : 'Fixar sala'}
+                          >
+                            {r.is_pinned ? (
+                              <PinOff size={14} color="var(--banana)" />
+                            ) : (
+                              <Pin size={14} />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-icon"
+                            style={{ width: 30, height: 30 }}
+                            onClick={() => void handleRemoveRoom(r.room_code)}
+                            title="Remover do histórico"
+                            aria-label="Remover sala do histórico"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {showAuthPanel && (
+                  <div className="lobby-fields" style={{ paddingTop: 8, borderTop: '1px solid var(--line)' }}>
+                    <span className="field-hint">
+                      Quer só entrar rápido? Clique em <strong>Continuar sem conta</strong> ao lado ou escolha uma sala salva acima.
+                    </span>
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
+
+          <div className={`lobby-foot ${user ? 'wide' : ''}`}>
             <span>
-              Vídeo direto P2P · v1.6.0
+              Vídeo direto P2P · v{APP_VERSION}
               {updateCheckedMsg ? ` · ${updateCheckedMsg}` : ''}
             </span>
             {nativeBridge.isDesktopApp && !updateInfo?.available && (
@@ -1006,6 +1428,7 @@ export function App() {
   const streamingPeers = peers.filter((p) => p.isStreaming);
   const chromeHidden = mouseIdle && (isFullscreen || !sidebarOpen) && Boolean(remoteStream);
   const disconnected = brokerCount === 0;
+  const onlineEntries = Object.values(presenceByKey);
 
   const renderStage = () => {
     if (displayStream) {
@@ -1021,8 +1444,8 @@ export function App() {
           <h2>Você está transmitindo</h2>
           <p>
             {peers.length > 0
-              ? `${countLabel(peers.length, 'pessoa recebe', 'pessoas recebem')} sua tela. A prévia aqui fica desligada para poupar a placa de vídeo.`
-              : 'Ninguém entrou ainda. Mande o nome da sala no Discord.'}
+              ? `${countLabel(peers.length, 'pessoa recebe', 'pessoas recebem')} sua tela. A prévia fica desligada para poupar a placa de vídeo.`
+              : 'Ninguém entrou ainda. Mande o convite da sala ou canal para os amigos.'}
           </p>
           {audioStatus && (
             <p className="note" style={{ justifyContent: 'center' }}>
@@ -1030,9 +1453,18 @@ export function App() {
               {audioStatus}
             </p>
           )}
-          <div className="stage-actions">
+          <div className="stage-actions" style={{ flexWrap: 'wrap', justifyContent: 'center' }}>
             <button type="button" className="btn btn-secondary" onClick={() => setShowLocalPreview(true)}>
               <Eye size={15} /> Ver minha tela
+            </button>
+            <button
+              type="button"
+              className="btn btn-banana"
+              style={{ height: 36 }}
+              onClick={() => void throwBanana()}
+              title="Atalho: tecla B"
+            >
+              <BananaIcon size={16} /> Tacar banana
             </button>
             <button type="button" className="btn btn-danger" onClick={handleStopShare}>
               <Square size={13} /> Parar transmissão
@@ -1105,6 +1537,19 @@ export function App() {
       onMouseMove={handleMouseMove}
     >
       <header className="topbar">
+        {roomServer && !isFullscreen && (
+          <button
+            type="button"
+            className="btn btn-icon"
+            style={{ width: 32, height: 32 }}
+            onClick={() => setServerRailOpen((v) => !v)}
+            title={serverRailOpen ? 'Esconder canais' : 'Mostrar canais do servidor'}
+            aria-label="Alternar lista de canais"
+          >
+            {serverRailOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
+          </button>
+        )}
+
         <LogoMark size={26} title="MacacoLive" />
 
         <div className="topbar-room">
@@ -1112,16 +1557,16 @@ export function App() {
             className={`conn-dot ${disconnected ? 'off' : ''}`}
             title={disconnected ? 'Sem conexão com a sala' : 'Conectado à sala'}
           />
-          <span className="topbar-room-name truncate" title={roomCode}>
-            {roomCode}
+          <span className="topbar-room-name truncate" title={roomServer ? `${roomServer.name} / #${roomDisplayName}` : roomCode}>
+            {roomServer ? `${roomServer.name} · #${roomDisplayName}` : roomCode}
           </span>
           <button
             type="button"
             className="btn btn-icon"
             style={{ width: 28, height: 28 }}
             onClick={copyInvite}
-            title="Copiar convite"
-            aria-label="Copiar convite da sala"
+            title={roomServer ? 'Copiar convite do servidor' : 'Copiar convite da sala'}
+            aria-label="Copiar convite"
           >
             {copied ? <Check size={14} color="var(--leaf)" /> : <Copy size={14} />}
           </button>
@@ -1186,19 +1631,57 @@ export function App() {
               )}
             </button>
           )}
+
+          <button
+            type="button"
+            className="btn btn-banana"
+            style={{ marginRight: 6 }}
+            onClick={() => void throwBanana()}
+            title="Tacar banana na tela de todo mundo (Atalho: B)"
+          >
+            <BananaIcon size={15} /> Tacar banana
+          </button>
+
           {localStream ? (
             <button type="button" className="btn btn-danger" onClick={handleStopShare}>
-              <Square size={13} /> Parar transmissão
+              <Square size={13} /> Parar
             </button>
           ) : (displayStream || watchTarget) ? (
             <button type="button" className="btn btn-primary" onClick={() => setShareModalOpen(true)}>
-              <MonitorUp size={15} /> Transmitir tela
+              <MonitorUp size={15} /> Transmitir
             </button>
           ) : null}
+
+          {nativeBridge.isDesktopApp && (
+            <button
+              type="button"
+              className="btn btn-icon"
+              onClick={() => void toggleAlwaysOnTop()}
+              title={alwaysOnTop ? 'Desafixar do topo' : 'Fixar janela no topo (Mini-player)'}
+              aria-label="Fixar janela no topo"
+            >
+              {alwaysOnTop ? <PinOff size={16} color="var(--banana)" /> : <Pin size={16} />}
+            </button>
+          )}
+
           <button
             type="button"
             className="btn btn-icon"
-            onClick={() => setSidebarOpen((v) => !v)}
+            onClick={toggleJokeSoundsMuted}
+            title={jokeSoundsMuted ? 'Ativar som da banana e chat' : 'Silenciar som da banana e chat'}
+            aria-label="Alternar sons de efeito"
+          >
+            {jokeSoundsMuted ? <BellOff size={16} /> : <Bell size={16} />}
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-icon"
+            onClick={() => {
+              const next = !sidebarOpen;
+              setSidebarOpen(next);
+              if (next && sidebarTab === 'people') setUnreadChat(false);
+            }}
             title={sidebarOpen ? 'Esconder painel' : 'Mostrar painel'}
             aria-label={sidebarOpen ? 'Esconder painel' : 'Mostrar painel'}
           >
@@ -1229,8 +1712,52 @@ export function App() {
       )}
 
       <div className="room-body">
-        <main className="stage" onDoubleClick={() => displayStream && void toggleFullscreen()}>
+        {/* Optional Left Server Channels Strip when inside a Discord Server */}
+        {roomServer && serverRailOpen && !isFullscreen && !chromeHidden && (
+          <aside className="room-channel-rail" aria-label="Canais do servidor">
+            <div className="rail-head">
+              <span
+                className="server-color-dot"
+                style={{ background: roomServer.accent_color }}
+              />
+              <strong className="truncate">{roomServer.name}</strong>
+            </div>
+
+            <div className="rail-channels">
+              {roomServer.channels.map((ch) => {
+                const isActive = ch.room_code === roomCode;
+                const occ = onlineEntries.filter((o) => o.channelRoomCode === ch.room_code);
+                const chLive = occ.some((o) => o.isStreaming);
+                return (
+                  <button
+                    key={ch.id}
+                    type="button"
+                    className={`rail-channel-btn ${isActive ? 'active' : ''}`}
+                    disabled={joining}
+                    onClick={() => void handleSwitchChannel(ch, roomServer)}
+                  >
+                    {renderChannelKindIcon(ch.channel_kind)}
+                    <span className="truncate">{ch.name}</span>
+                    {occ.length > 0 && (
+                      <span className={`rail-occ-badge num ${chLive ? 'live' : ''}`}>
+                        {chLive ? 'AO VIVO' : occ.length}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
+        )}
+
+        <main
+          className={`stage ${stageHit ? 'stage-banana-hit' : ''}`}
+          onDoubleClick={() => displayStream && void toggleFullscreen()}
+        >
           {renderStage()}
+
+          {/* Cartoon Banana Flight + Splat Overlay (visible for BOTH broadcaster & viewers) */}
+          <BananaOverlay bananas={bananas} latestThrow={latestBanana} />
 
           <div className="reactions" aria-live="polite">
             {reactions.map((r) => (
@@ -1291,6 +1818,15 @@ export function App() {
               )}
 
               <span className="hud-sep" />
+              <button
+                type="button"
+                className="btn btn-banana"
+                onClick={() => void throwBanana()}
+                title="Tacar banana na tela (Tecla B)"
+              >
+                <BananaIcon size={15} /> Tacar banana
+              </button>
+
               <div style={{ display: 'flex' }}>
                 {REACTIONS.map((em) => (
                   <button
@@ -1304,7 +1840,18 @@ export function App() {
                   </button>
                 ))}
               </div>
+
               <span className="hud-sep" />
+              <button
+                type="button"
+                className="btn btn-icon"
+                style={{ width: 32, height: 32 }}
+                onClick={takeSnapshot}
+                title="Salvar print da transmissão"
+                aria-label="Salvar print da transmissão"
+              >
+                <Camera size={15} />
+              </button>
               <button
                 type="button"
                 className="btn btn-icon"
@@ -1321,292 +1868,331 @@ export function App() {
 
         {sidebarOpen && (
           <aside className="sidebar">
-            <section className="side-section">
-              <h3 className="side-title">
-                Na sala
-                <small className="num">{countLabel(peers.length + 1, 'pessoa', 'pessoas')}</small>
-              </h3>
+            <div className="side-section" style={{ paddingBottom: 10 }}>
+              <div className="segmented" role="tablist">
+                <button
+                  type="button"
+                  className="seg"
+                  aria-pressed={sidebarTab === 'people'}
+                  onClick={() => {
+                    setSidebarTab('people');
+                    setUnreadChat(false);
+                  }}
+                >
+                  <MessageSquare size={13} style={{ verticalAlign: -2, marginRight: 5 }} />
+                  Sala &amp; Chat
+                  {unreadChat && <span className="tab-dot" />}
+                </button>
+                <button
+                  type="button"
+                  className="seg"
+                  aria-pressed={sidebarTab === 'quality'}
+                  onClick={() => setSidebarTab('quality')}
+                >
+                  <SlidersHorizontal size={13} style={{ verticalAlign: -2, marginRight: 5 }} />
+                  Vídeo &amp; Som
+                </button>
+              </div>
+            </div>
 
-              <div className="people">
-                <div className="person">
-                  <span className="avatar self">{initials(nickname)}</span>
-                  <span className="person-text">
-                    <span className="person-name truncate" title={nickname}>
-                      {nickname}
-                    </span>
-                    <span className={`person-sub ${localStream ? 'live' : ''}`}>
-                      {localStream ? 'Transmitindo' : 'Você'}
-                    </span>
-                  </span>
-                </div>
+            {sidebarTab === 'people' ? (
+              <>
+                <section className="side-section">
+                  <h3 className="side-title">
+                    Na sala
+                    <small className="num">{countLabel(peers.length + 1, 'pessoa', 'pessoas')}</small>
+                  </h3>
 
-                {peers.map((p) => {
-                  const isWatching = watchTarget === p.peerId && Boolean(remoteStream);
-                  return (
-                    <div key={p.peerId} className={`person ${isWatching ? 'is-watching' : ''}`}>
-                      <span className="avatar">{initials(p.nickname)}</span>
+                  <div className="people">
+                    <div className="person">
+                      <span className="avatar self">{initials(nickname)}</span>
                       <span className="person-text">
-                        <span className="person-name truncate" title={p.nickname}>
-                          {p.nickname}
+                        <span className="person-name truncate" title={nickname}>
+                          {nickname}
                         </span>
-                        <span className={`person-sub ${p.isStreaming ? 'live' : ''}`}>
-                          {p.isStreaming ? 'Transmitindo' : 'Assistindo'}
+                        <span className={`person-sub ${localStream ? 'live' : ''}`}>
+                          {localStream ? 'Transmitindo' : 'Você'}
                         </span>
                       </span>
-                      {p.isStreaming && !isWatching && (
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          onClick={() => void engineRef.current?.watchStreamer(p.peerId)}
-                        >
-                          Assistir
-                        </button>
-                      )}
                     </div>
-                  );
-                })}
-              </div>
 
-              {peers.length === 0 && (
-                <p className="empty-note">
-                  Só você por aqui. Mande <strong>{roomCode}</strong> no Discord, ou use o botão de copiar convite no topo.
-                </p>
-              )}
-              {streamingPeers.length > 1 && (
-                <p className="field-hint">{streamingPeers.length} pessoas transmitindo. Escolha qual assistir.</p>
-              )}
-            </section>
+                    {peers.map((p) => {
+                      const isWatching = watchTarget === p.peerId && Boolean(remoteStream);
+                      return (
+                        <div key={p.peerId} className={`person ${isWatching ? 'is-watching' : ''}`}>
+                          <span className="avatar">{initials(p.nickname)}</span>
+                          <span className="person-text">
+                            <span className="person-name truncate" title={p.nickname}>
+                              {p.nickname}
+                            </span>
+                            <span className={`person-sub ${p.isStreaming ? 'live' : ''}`}>
+                              {p.isStreaming ? 'Transmitindo' : 'Assistindo'}
+                            </span>
+                          </span>
+                          {p.isStreaming && !isWatching && (
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              onClick={() => void engineRef.current?.watchStreamer(p.peerId)}
+                            >
+                              Assistir
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
 
-            <section className="side-section">
-              <h3 className="side-title">
-                Transmissão
-                {localStream && <small style={{ color: 'var(--leaf)' }}>Ao vivo, muda na hora</small>}
-              </h3>
+                  {peers.length === 0 && (
+                    <p className="empty-note">
+                      Só você por aqui. Copie o convite ali em cima para chamar a turma.
+                    </p>
+                  )}
+                  {streamingPeers.length > 1 && (
+                    <p className="field-hint">{streamingPeers.length} pessoas transmitindo. Escolha qual assistir.</p>
+                  )}
+                </section>
 
-              <div className="field">
-                <span className="field-label">Perfil rápido</span>
-                <div className="segmented" role="group" aria-label="Perfil rápido">
-                  <button
-                    type="button"
-                    className="seg"
-                    aria-pressed={quality.resolution === '1080p' && quality.fps === 60 && quality.bitrateMbps >= 10}
-                    onClick={() =>
-                      void applyQualityChange({
-                        profile: 'cinema',
-                        resolution: '1080p',
-                        fps: 60,
-                        bitrateMbps: 12,
-                      })
-                    }
-                  >
-                    Cinema
-                  </button>
-                  <button
-                    type="button"
-                    className="seg"
-                    aria-pressed={quality.resolution === '720p' && quality.fps === 60 && quality.bitrateMbps <= 6}
-                    onClick={() =>
-                      void applyQualityChange({
-                        profile: 'cinema',
-                        resolution: '720p',
-                        fps: 60,
-                        bitrateMbps: 5,
-                      })
-                    }
-                  >
-                    Jogo leve
-                  </button>
-                  <button
-                    type="button"
-                    className="seg"
-                    aria-pressed={quality.resolution === '720p' && quality.fps === 30}
-                    onClick={() =>
-                      void applyQualityChange({
-                        profile: 'cinema',
-                        resolution: '720p',
-                        fps: 30,
-                        bitrateMbps: 3,
-                      })
-                    }
-                  >
-                    PC fraco
-                  </button>
-                </div>
-              </div>
+                <section className="side-section">
+                  <h3 className="side-title">
+                    Chat da sala
+                    <small>Ao vivo</small>
+                  </h3>
+                  <RoomChat messages={chatMessages} onSend={sendChat} />
+                </section>
+              </>
+            ) : (
+              <section className="side-section">
+                <h3 className="side-title">
+                  Transmissão
+                  {localStream && <small style={{ color: 'var(--leaf)' }}>Ao vivo, muda na hora</small>}
+                </h3>
 
-              {nativeBridge.supportsNativeDxgiTrack && (
                 <div className="field">
-                  <span className="field-label">Captura</span>
-                  <div className="segmented" role="group" aria-label="Modo de captura">
+                  <span className="field-label">Perfil rápido</span>
+                  <div className="segmented" role="group" aria-label="Perfil rápido">
                     <button
                       type="button"
                       className="seg"
-                      aria-pressed={quality.captureSource === 'dxgi-monitor'}
+                      aria-pressed={quality.resolution === '1080p' && quality.fps === 60 && quality.bitrateMbps >= 10}
                       onClick={() =>
-                        void applyQualityChange({ captureSource: 'dxgi-monitor' as CaptureSource })
+                        void applyQualityChange({
+                          profile: 'cinema',
+                          resolution: '1080p',
+                          fps: 60,
+                          bitrateMbps: 12,
+                        })
                       }
                     >
-                      Monitor DXGI (Jogos)
+                      Cinema
                     </button>
                     <button
                       type="button"
                       className="seg"
-                      aria-pressed={quality.captureSource === 'window-picker'}
+                      aria-pressed={quality.resolution === '720p' && quality.fps === 60 && quality.bitrateMbps <= 6}
                       onClick={() =>
-                        void applyQualityChange({ captureSource: 'window-picker' as CaptureSource })
+                        void applyQualityChange({
+                          profile: 'cinema',
+                          resolution: '720p',
+                          fps: 60,
+                          bitrateMbps: 5,
+                        })
                       }
                     >
-                      Escolher janela
+                      Jogo leve
+                    </button>
+                    <button
+                      type="button"
+                      className="seg"
+                      aria-pressed={quality.resolution === '720p' && quality.fps === 30}
+                      onClick={() =>
+                        void applyQualityChange({
+                          profile: 'cinema',
+                          resolution: '720p',
+                          fps: 30,
+                          bitrateMbps: 3,
+                        })
+                      }
+                    >
+                      PC fraco
                     </button>
                   </div>
-                  {quality.captureSource === 'dxgi-monitor' && monitors.length > 0 && (
+                </div>
+
+                {nativeBridge.supportsNativeDxgiTrack && (
+                  <div className="field">
+                    <span className="field-label">Captura</span>
+                    <div className="segmented" role="group" aria-label="Modo de captura">
+                      <button
+                        type="button"
+                        className="seg"
+                        aria-pressed={quality.captureSource === 'dxgi-monitor'}
+                        onClick={() =>
+                          void applyQualityChange({ captureSource: 'dxgi-monitor' as CaptureSource })
+                        }
+                      >
+                        Monitor DXGI (Jogos)
+                      </button>
+                      <button
+                        type="button"
+                        className="seg"
+                        aria-pressed={quality.captureSource === 'window-picker'}
+                        onClick={() =>
+                          void applyQualityChange({ captureSource: 'window-picker' as CaptureSource })
+                        }
+                      >
+                        Escolher janela
+                      </button>
+                    </div>
+                    {quality.captureSource === 'dxgi-monitor' && monitors.length > 0 && (
+                      <select
+                        className="select"
+                        value={quality.monitorIndex}
+                        onChange={(e) =>
+                          void applyQualityChange({ monitorIndex: Number(e.target.value) })
+                        }
+                        aria-label="Monitor"
+                      >
+                        {monitors.map((m) => (
+                          <option key={m.index} value={m.index}>
+                            {m.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                )}
+
+                <div className="field">
+                  <span className="field-label">Resolução</span>
+                  <div className="segmented" role="group" aria-label="Resolução">
+                    {(['720p', '1080p', '1440p', 'native'] as ResolutionPreset[]).map((res) => (
+                      <button
+                        key={res}
+                        type="button"
+                        className="seg"
+                        aria-pressed={quality.resolution === res}
+                        onClick={() => void applyQualityChange({ resolution: res })}
+                      >
+                        {res === 'native' ? 'Nativa' : res}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="field">
+                  <span className="field-label">Quadros por segundo</span>
+                  <div className="segmented" role="group" aria-label="Quadros por segundo">
+                    {[60, 30].map((f) => (
+                      <button
+                        key={f}
+                        type="button"
+                        className="seg"
+                        aria-pressed={quality.fps === f}
+                        onClick={() => void applyQualityChange({ fps: f as 30 | 60 })}
+                      >
+                        {f} fps
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="field">
+                  <label className="field-label" htmlFor="bitrate">
+                    Qualidade máxima
+                    <span className="num" style={{ fontWeight: 600 }}>
+                      {quality.bitrateMbps} Mbps
+                    </span>
+                  </label>
+                  <input
+                    id="bitrate"
+                    type="range"
+                    className="range"
+                    min={2}
+                    max={25}
+                    step={1}
+                    value={quality.bitrateMbps}
+                    onChange={(e) => void applyQualityChange({ bitrateMbps: Number(e.target.value) })}
+                  />
+                </div>
+
+                <div className="field">
+                  <label className="field-label" htmlFor="audio-mode">
+                    Som
+                    <button
+                      type="button"
+                      className="btn btn-icon"
+                      style={{ width: 24, height: 24 }}
+                      onClick={() => void refreshAudioApps()}
+                      title="Atualizar lista de programas"
+                      aria-label="Atualizar lista de programas"
+                    >
+                      <RefreshCw size={12} />
+                    </button>
+                  </label>
+                  <select
+                    id="audio-mode"
+                    className="select"
+                    value={quality.audioMode}
+                    onChange={(e) => void applyQualityChange({ audioMode: e.target.value as AudioCaptureMode })}
+                  >
+                    <option value="exclude-discord">PC inteiro, menos o Discord</option>
+                    <option value="include-process">Só um programa</option>
+                    <option value="system-all">PC inteiro</option>
+                    <option value="none">Sem som</option>
+                  </select>
+
+                  {quality.audioMode === 'include-process' && (
                     <select
                       className="select"
-                      value={quality.monitorIndex}
-                      onChange={(e) =>
-                        void applyQualityChange({ monitorIndex: Number(e.target.value) })
-                      }
-                      aria-label="Monitor"
+                      value={quality.targetPid}
+                      onChange={(e) => void applyQualityChange({ targetPid: Number(e.target.value) })}
+                      aria-label="Programa"
                     >
-                      {monitors.map((m) => (
-                        <option key={m.index} value={m.index}>
-                          {m.name}
+                      {audioProcesses.length === 0 && <option value={0}>Nenhum programa com janela aberto</option>}
+                      {audioProcesses.map((proc) => (
+                        <option key={proc.pid} value={proc.pid}>
+                          {proc.name}: {proc.title.length > 40 ? `${proc.title.slice(0, 40)}…` : proc.title}
                         </option>
                       ))}
                     </select>
                   )}
-                </div>
-              )}
 
-              <div className="field">
-                <span className="field-label">Resolução</span>
-                <div className="segmented" role="group" aria-label="Resolução">
-                  {(['720p', '1080p', '1440p', 'native'] as ResolutionPreset[]).map((res) => (
-                    <button
-                      key={res}
-                      type="button"
-                      className="seg"
-                      aria-pressed={quality.resolution === res}
-                      onClick={() => void applyQualityChange({ resolution: res })}
-                    >
-                      {res === 'native' ? 'Nativa' : res}
-                    </button>
-                  ))}
+                  {quality.audioMode === 'exclude-discord' && (
+                    <p className="note">
+                      <ShieldCheck size={14} />
+                      {discordDetected
+                        ? 'Discord aberto. A voz da call não entra no som da transmissão.'
+                        : 'Discord fechado. Se abrir durante a transmissão, a voz continua de fora.'}
+                    </p>
+                  )}
                 </div>
-              </div>
 
-              <div className="field">
-                <span className="field-label">Quadros por segundo</span>
-                <div className="segmented" role="group" aria-label="Quadros por segundo">
-                  {[60, 30].map((f) => (
-                    <button
-                      key={f}
-                      type="button"
-                      className="seg"
-                      aria-pressed={quality.fps === f}
-                      onClick={() => void applyQualityChange({ fps: f as 30 | 60 })}
-                    >
-                      {f} fps
-                    </button>
-                  ))}
-                </div>
-              </div>
+                {localStream && quality.audioMode !== 'none' && (
+                  <div className="meter">
+                    <div className="meter-head">
+                      <span>Som saindo</span>
+                      <span className="num">{vuLevel}%</span>
+                    </div>
+                    <div className="meter-track">
+                      <div className="meter-fill" style={{ transform: `scaleX(${vuLevel / 100})` }} />
+                    </div>
+                  </div>
+                )}
 
-              <div className="field">
-                <label className="field-label" htmlFor="bitrate">
-                  Qualidade máxima
-                  <span className="num" style={{ fontWeight: 600 }}>
-                    {quality.bitrateMbps} Mbps
+                <label className="switch-row">
+                  <input
+                    type="checkbox"
+                    checked={quality.cascadeRelay}
+                    onChange={(e) => void applyQualityChange({ cascadeRelay: e.target.checked })}
+                  />
+                  <span>
+                    Dividir o envio com quem assiste
+                    <small>Use se tiver 4 pessoas ou mais e sua internet travar.</small>
                   </span>
                 </label>
-                <input
-                  id="bitrate"
-                  type="range"
-                  className="range"
-                  min={2}
-                  max={25}
-                  step={1}
-                  value={quality.bitrateMbps}
-                  onChange={(e) => void applyQualityChange({ bitrateMbps: Number(e.target.value) })}
-                />
-              </div>
-
-              <div className="field">
-                <label className="field-label" htmlFor="audio-mode">
-                  Som
-                  <button
-                    type="button"
-                    className="btn btn-icon"
-                    style={{ width: 24, height: 24 }}
-                    onClick={() => void refreshAudioApps()}
-                    title="Atualizar lista de programas"
-                    aria-label="Atualizar lista de programas"
-                  >
-                    <RefreshCw size={12} />
-                  </button>
-                </label>
-                <select
-                  id="audio-mode"
-                  className="select"
-                  value={quality.audioMode}
-                  onChange={(e) => void applyQualityChange({ audioMode: e.target.value as AudioCaptureMode })}
-                >
-                  <option value="exclude-discord">PC inteiro, menos o Discord</option>
-                  <option value="include-process">Só um programa</option>
-                  <option value="system-all">PC inteiro</option>
-                  <option value="none">Sem som</option>
-                </select>
-
-                {quality.audioMode === 'include-process' && (
-                  <select
-                    className="select"
-                    value={quality.targetPid}
-                    onChange={(e) => void applyQualityChange({ targetPid: Number(e.target.value) })}
-                    aria-label="Programa"
-                  >
-                    {audioProcesses.length === 0 && <option value={0}>Nenhum programa com janela aberto</option>}
-                    {audioProcesses.map((proc) => (
-                      <option key={proc.pid} value={proc.pid}>
-                        {proc.name}: {proc.title.length > 40 ? `${proc.title.slice(0, 40)}…` : proc.title}
-                      </option>
-                    ))}
-                  </select>
-                )}
-
-                {quality.audioMode === 'exclude-discord' && (
-                  <p className="note">
-                    <ShieldCheck size={14} />
-                    {discordDetected
-                      ? 'Discord aberto. A voz da call não entra no som da transmissão.'
-                      : 'Discord fechado. Se abrir durante a transmissão, a voz continua de fora.'}
-                  </p>
-                )}
-              </div>
-
-              {localStream && quality.audioMode !== 'none' && (
-                <div className="meter">
-                  <div className="meter-head">
-                    <span>Som saindo</span>
-                    <span className="num">{vuLevel}%</span>
-                  </div>
-                  <div className="meter-track">
-                    <div className="meter-fill" style={{ transform: `scaleX(${vuLevel / 100})` }} />
-                  </div>
-                </div>
-              )}
-
-              <label className="switch-row">
-                <input
-                  type="checkbox"
-                  checked={quality.cascadeRelay}
-                  onChange={(e) => void applyQualityChange({ cascadeRelay: e.target.checked })}
-                />
-                <span>
-                  Dividir o envio com quem assiste
-                  <small>Use se tiver 4 pessoas ou mais e sua internet travar.</small>
-                </span>
-              </label>
-            </section>
+              </section>
+            )}
           </aside>
         )}
       </div>

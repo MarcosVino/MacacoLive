@@ -543,3 +543,200 @@ a {
     display: none;
   }
 }
+
+/* Confirmation & Account Finish Page (/confirm.html) */
+.confirm-shell {
+  min-height: calc(100vh - 134px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 20px 64px;
+}
+
+.confirm-card {
+  width: 100%;
+  max-width: 472px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 28px;
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.35);
+}
+
+.confirm-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  color: var(--text-2);
+}
+
+.confirm-badge.ok {
+  border-color: rgba(141, 191, 106, 0.42);
+  background: rgba(141, 191, 106, 0.12);
+  color: #b7e499;
+}
+
+.confirm-badge.warn {
+  border-color: rgba(245, 200, 66, 0.42);
+  background: rgba(245, 200, 66, 0.12);
+  color: var(--banana);
+}
+
+.confirm-badge.err {
+  border-color: rgba(231, 101, 79, 0.45);
+  background: rgba(231, 101, 79, 0.12);
+  color: #f49b8c;
+}
+
+.confirm-card h1 {
+  font-family: var(--font-display);
+  font-size: 25px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  margin-bottom: 10px;
+}
+
+.confirm-copy {
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.confirm-user-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  margin-bottom: 18px;
+}
+
+.confirm-user-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+}
+
+.confirm-user-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.confirm-steps {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-radius: var(--r-md);
+  background: rgba(245, 200, 66, 0.06);
+  border: 1px solid rgba(245, 200, 66, 0.2);
+  font-size: 13px;
+  color: var(--text-2);
+  margin-bottom: 20px;
+}
+
+.confirm-steps strong {
+  color: var(--text);
+}
+
+.confirm-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.confirm-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.confirm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.confirm-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.confirm-input {
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 140ms var(--ease-out);
+}
+
+.confirm-input:focus {
+  border-color: var(--banana);
+}
+
+.confirm-feedback {
+  font-size: 13px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--text-2);
+}
+
+.confirm-feedback.ok {
+  border-color: rgba(141, 191, 106, 0.4);
+  color: #b7e499;
+}
+
+.confirm-feedback.err {
+  border-color: rgba(231, 101, 79, 0.42);
+  color: #f49b8c;
+}
+
+.confirm-divider {
+  margin: 18px 0 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.spinner-ring {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: spinRing 0.7s linear infinite;
+}
+
+@keyframes spinRing {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.hidden {
+  display: none !important;
+}

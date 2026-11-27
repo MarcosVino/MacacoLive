@@ -38,7 +38,7 @@
           <div class="hero-copy">
             <div class="release-line num">
               <span class="dot" aria-hidden="true"></span>
-              <span id="release-meta">Windows 10 e 11 · v1.6.0 · ~1.1 MB</span>
+              <span id="release-meta">Windows 10 e 11 · v1.7.0 · ~1.2 MB</span>
             </div>
 
             <h1>Compartilhe a tela com som limpo para a turma assistir junto.</h1>
@@ -259,7 +259,7 @@
             const v = await res.json();
             if (v.version) {
               const meta = document.getElementById('release-meta');
-              if (meta) meta.textContent = `Windows 10 e 11 · v${v.version} · ~948 KB`;
+              if (meta) meta.textContent = `Windows 10 e 11 · v${v.version} · ${v.size || '~1.2 MB'}`;
               const btn = document.getElementById('dl-btn');
               if (btn && v.url) btn.href = v.url;
               const lbl = document.getElementById('dl-label');

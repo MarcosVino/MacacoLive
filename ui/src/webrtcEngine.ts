@@ -1,6 +1,8 @@
 import { nativeBridge } from './nativeBridge';
 import { ServerlessRoomSignaling } from './signaling';
 import {
+  BananaThrowEvent,
+  ChatMessage,
   PeerInfo,
   ResolutionPreset,
   SignalEnvelope,
@@ -171,6 +173,8 @@ export interface EngineCallbacks {
   onWatchTargetChanged: (streamerId: string | null) => void;
   onBrokerStatus: (connectedCount: number) => void;
   onReaction: (fromNick: string, emoji: string) => void;
+  onBanana?: (event: BananaThrowEvent) => void;
+  onChatMessage?: (msg: ChatMessage) => void;
 }
 
 export class MacacoWebRtcEngine {
@@ -268,6 +272,14 @@ export class MacacoWebRtcEngine {
       nickname: this.nickname,
       emoji,
     });
+  }
+
+  public async sendBanana(event: BananaThrowEvent): Promise<void> {
+    await this.signaling.send('*', 'banana', event);
+  }
+
+  public async sendChatMessage(msg: ChatMessage): Promise<void> {
+    await this.signaling.send('*', 'chat', msg);
   }
 
   private async broadcastPresence(type: 'announce' | 'welcome', to = '*') {
@@ -752,6 +764,23 @@ export class MacacoWebRtcEngine {
         data?.nickname || 'Amigo',
         data?.emoji || '🍌'
       );
+      return;
+    }
+
+    if (env.type === 'banana' && data?.id) {
+      this.callbacks.onBanana?.(data as BananaThrowEvent);
+      return;
+    }
+
+    if (env.type === 'chat' && data?.text) {
+      this.callbacks.onChatMessage?.({
+        id: String(data.id || env.id),
+        senderId: sender,
+        nickname: String(data.nickname || 'Amigo'),
+        text: String(data.text),
+        ts: Number(data.ts || env.ts || Date.now()),
+        self: false,
+      });
       return;
     }
 

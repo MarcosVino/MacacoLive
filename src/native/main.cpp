@@ -710,6 +710,21 @@ private:
             return;
         }
 
+        if (cmd == L"setAlwaysOnTop") {
+            bool top = json_mini::ExtractBool(json, L"alwaysOnTop", false);
+            m_isAlwaysOnTop = top;
+            SetWindowPos(
+                m_hwnd,
+                m_isAlwaysOnTop ? HWND_TOPMOST : HWND_NOTOPMOST,
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            ReplySuccess(reqId, std::wstring(L"{\"alwaysOnTop\":") + (m_isAlwaysOnTop ? L"true" : L"false") + L"}");
+            return;
+        }
+
         ReplyError(reqId, L"Comando desconhecido");
     }
 
@@ -769,12 +784,12 @@ private:
             SetWindowPlacement(m_hwnd, &m_savedPlacement);
             SetWindowPos(
                 m_hwnd,
-                HWND_NOTOPMOST,
+                m_isAlwaysOnTop ? HWND_TOPMOST : HWND_NOTOPMOST,
                 0,
                 0,
                 0,
                 0,
-                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
             m_isFullscreen = false;
             ResizeWebView();
         }
@@ -812,8 +827,8 @@ private:
 
             case WM_GETMINMAXINFO: {
                 auto* mmi = reinterpret_cast<MINMAXINFO*>(lParam);
-                mmi->ptMinTrackSize.x = 900;
-                mmi->ptMinTrackSize.y = 580;
+                mmi->ptMinTrackSize.x = 460;
+                mmi->ptMinTrackSize.y = 300;
                 return 0;
             }
 
@@ -868,6 +883,7 @@ private:
     HINSTANCE m_hInst = nullptr;
     HWND m_hwnd = nullptr;
     bool m_isFullscreen = false;
+    bool m_isAlwaysOnTop = false;
     DWORD m_savedStyle = WS_OVERLAPPEDWINDOW;
     DWORD m_savedExStyle = 0;
     WINDOWPLACEMENT m_savedPlacement{sizeof(WINDOWPLACEMENT)};

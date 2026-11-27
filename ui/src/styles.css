@@ -351,8 +351,10 @@ button {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: safe center;
   padding: var(--s-5);
 }
 
@@ -722,11 +724,14 @@ button {
   left: 50%;
   bottom: var(--s-4);
   transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  overflow-x: auto;
+  scrollbar-width: none;
   display: flex;
   align-items: center;
-  gap: var(--s-3);
+  gap: var(--s-2);
   height: 48px;
-  padding: 0 var(--s-2) 0 var(--s-4);
+  padding: 0 var(--s-2) 0 var(--s-3);
   border-radius: var(--r-lg);
   background: rgba(20, 17, 13, 0.86);
   backdrop-filter: blur(12px);
@@ -1354,6 +1359,686 @@ button {
   .modal-settings {
     grid-template-columns: 1fr;
   }
+  .discord-shell {
+    flex-direction: column;
+  }
+  .server-rail {
+    flex-direction: row;
+    width: 100%;
+    height: auto;
+    overflow-x: auto;
+    padding: var(--s-2);
+  }
+  .server-workspace {
+    grid-template-columns: 1fr;
+  }
+  .room-channel-rail {
+    display: none;
+  }
+}
+
+/* ============================================================
+   Discord-Style Servers & Channels Hub + In-Room Switcher
+   ============================================================ */
+
+.discord-shell {
+  width: 100%;
+  max-width: 1040px;
+  display: flex;
+  gap: var(--s-4);
+  align-items: stretch;
+  min-height: 490px;
+}
+
+.lobby-foot.wide {
+  max-width: 1040px;
+}
+
+.server-rail {
+  width: 66px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.srv-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-height: 300px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.srv-sep {
+  width: 28px;
+  height: 1px;
+  background: var(--line);
+  margin: 2px 0;
+}
+
+.srv-pill {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--text-2);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition:
+    border-radius 160ms var(--ease-out),
+    background-color 150ms var(--ease-out),
+    border-color 150ms var(--ease-out),
+    color 150ms var(--ease-out),
+    transform 120ms var(--ease-out);
+}
+
+.srv-pill:active {
+  transform: scale(0.95);
+}
+
+.srv-pill.active {
+  border-radius: 13px;
+  background: var(--srv-color, var(--banana));
+  border-color: transparent;
+  color: var(--on-banana);
+}
+
+.srv-pill.srv-action {
+  border-style: dashed;
+  color: var(--banana);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .srv-pill:hover {
+    border-radius: 13px;
+    border-color: var(--line-strong);
+    color: var(--text);
+  }
+  .srv-pill.active:hover {
+    border-color: transparent;
+    color: var(--on-banana);
+  }
+  .srv-pill.srv-action:hover {
+    background: var(--banana-tint);
+    border-color: rgba(245, 200, 66, 0.5);
+  }
+}
+
+.server-workspace {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(240px, 0.85fr);
+  gap: var(--s-4);
+}
+
+.server-panel,
+.roster-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: var(--s-5);
+  display: flex;
+  flex-direction: column;
+}
+
+.server-panel-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  margin-bottom: var(--s-4);
+}
+
+.server-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.server-title-row h1 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.server-color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.server-subbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.server-subbar .field-hint {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.channel-cards {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 310px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.channel-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border-radius: var(--r-md);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  transition: border-color 150ms var(--ease-out), background-color 150ms var(--ease-out);
+}
+
+.channel-card.is-live {
+  border-color: rgba(141, 191, 106, 0.45);
+}
+
+.channel-card-btn {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.channel-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-sm);
+  background: var(--raised);
+  color: var(--text-2);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.channel-card.is-live .channel-icon {
+  background: rgba(141, 191, 106, 0.14);
+  color: var(--leaf);
+}
+
+.channel-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.channel-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.channel-sub {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(141, 191, 106, 0.16);
+  color: #b5e695;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.channel-del-btn {
+  width: 28px;
+  height: 28px;
+  opacity: 0.55;
+  margin-right: 4px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .channel-card:hover {
+    border-color: var(--line-strong);
+    background: var(--raised);
+  }
+  .channel-del-btn:hover {
+    opacity: 1;
+    color: var(--danger);
+  }
+}
+
+.server-panel-foot {
+  margin-top: var(--s-4);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+
+.roster-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 360px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.roster-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--r-md);
+  background: var(--bg);
+  border: 1px solid transparent;
+}
+
+.roster-item .avatar {
+  position: relative;
+}
+
+.presence-dot {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--text-3);
+  border: 2px solid var(--surface);
+}
+
+.presence-dot.on {
+  background: var(--leaf);
+}
+
+.owner-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--banana-tint);
+  color: var(--banana);
+}
+
+.cta-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.modal-compact {
+  max-width: 420px;
+}
+
+.color-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 120ms var(--ease-out), border-color 150ms var(--ease-out);
+}
+
+.color-swatch.selected {
+  border-color: var(--text);
+  transform: scale(1.1);
+}
+
+/* In-Room Left Server Channel Switcher */
+.room-channel-rail {
+  width: 214px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  padding: var(--s-3);
+  gap: var(--s-2);
+  overflow-y: auto;
+}
+
+.rail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.rail-head strong {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.rail-channels {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rail-channel-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 9px;
+  border-radius: var(--r-md);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 140ms var(--ease-out), color 140ms var(--ease-out);
+}
+
+.rail-channel-btn.active {
+  background: var(--raised);
+  border-color: var(--line);
+  color: var(--text);
+  font-weight: 600;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .rail-channel-btn:hover {
+    background: var(--raised);
+    color: var(--text);
+  }
+}
+
+.rail-occ-badge {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text-2);
+}
+
+.rail-occ-badge.live {
+  background: rgba(141, 191, 106, 0.16);
+  color: #b5e695;
+}
+
+/* Room Chat Panel */
+.chat-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.chat-log {
+  max-height: 220px;
+  min-height: 110px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: var(--r-md);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.chat-msg {
+  font-size: 12.5px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.chat-msg strong {
+  color: var(--text);
+  margin-right: 6px;
+}
+
+.chat-msg.self strong {
+  color: var(--banana);
+}
+
+.chat-msg span {
+  color: var(--text-2);
+}
+
+.chat-form {
+  display: flex;
+  gap: 6px;
+}
+
+.chat-form .input {
+  height: 34px;
+  font-size: 13px;
+}
+
+.tab-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--banana);
+  margin-left: 5px;
+}
+
+/* ============================================================
+   Banana Throw Button + Cartoon Physics Overlay
+   ============================================================ */
+
+.btn-banana {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--r-md);
+  background: linear-gradient(180deg, #ffe06b 0%, #f5c842 100%);
+  color: var(--on-banana);
+  border: 1px solid #d7a625;
+  font-weight: 700;
+  font-size: 12.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(245, 200, 66, 0.24);
+  transition:
+    transform 120ms var(--ease-out),
+    filter 140ms var(--ease-out);
+}
+
+.btn-banana:active {
+  transform: scale(0.92) rotate(-3deg);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn-banana:hover {
+    filter: brightness(1.06);
+  }
+}
+
+.banana-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 32;
+}
+
+.banana-splat {
+  position: absolute;
+  width: 118px;
+  height: 118px;
+  margin-left: -59px;
+  margin-top: -59px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  will-change: transform, opacity;
+  animation: bananaFlightSplat 2.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.banana-svg {
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.45));
+}
+
+.banana-tag {
+  margin-top: -12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(20, 17, 13, 0.9);
+  border: 1px solid rgba(245, 200, 66, 0.45);
+  color: #f4ede1;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+@keyframes bananaFlightSplat {
+  0% {
+    opacity: 0.7;
+    transform: translate3d(var(--dx, -30vw), var(--dy, 45vh), 0) scale(0.45) rotate(calc(var(--rot, 15deg) - 260deg));
+  }
+  14% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1.24) rotate(var(--rot, 15deg));
+  }
+  20% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(0.96) rotate(var(--rot, 15deg));
+  }
+  25% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1.03) rotate(var(--rot, 15deg));
+  }
+  72% {
+    opacity: 0.96;
+    transform: translate3d(0, 22px, 0) scale(1) rotate(var(--rot, 15deg));
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, 72px, 0) scale(0.9) rotate(var(--rot, 15deg));
+  }
+}
+
+.banana-banner {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 28px);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgba(20, 17, 13, 0.92);
+  border: 1px solid rgba(245, 200, 66, 0.55);
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  animation: bananaBannerIn 2.2s var(--ease-out) forwards;
+}
+
+.banana-banner-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--banana);
+  flex-shrink: 0;
+}
+
+.banana-combo-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--banana);
+  color: var(--on-banana);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+@keyframes bananaBannerIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(-50%, -12px, 0) scale(0.92);
+  }
+  12%,
+  80% {
+    opacity: 1;
+    transform: translate3d(-50%, 0, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(-50%, -8px, 0) scale(0.96);
+  }
+}
+
+.stage.stage-banana-hit {
+  animation: stageThud 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes stageThud {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  28% {
+    transform: translate3d(3px, 4px, 0);
+  }
+  58% {
+    transform: translate3d(-3px, -2px, 0);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1368,6 +2053,14 @@ button {
   }
   .reaction-toast {
     animation-name: toast-fade;
+  }
+  .banana-splat,
+  .banana-banner {
+    animation-name: toast-fade !important;
+    animation-duration: 2.2s !important;
+  }
+  .stage.stage-banana-hit {
+    animation: none !important;
   }
   @keyframes toast-fade {
     0%,

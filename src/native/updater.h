@@ -20,7 +20,7 @@
 
 namespace updater {
 
-inline constexpr const wchar_t* kAppVersion = L"1.6.0";
+inline constexpr const wchar_t* kAppVersion = L"1.7.0";
 inline constexpr const wchar_t* kDefaultUpdateApiUrl =
     L"https://macacolive.netlify.app/version.json";
 

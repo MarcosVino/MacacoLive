@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Confirme sua conta no MacacoLive</title>
+  </head>
+  <body
+    style="
+      margin: 0;
+      padding: 0;
+      background-color: #14110d;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      color: #f4ede1;
+    "
+  >
+    <table
+      role="presentation"
+      width="100%"
+      cellspacing="0"
+      cellpadding="0"
+      style="background-color: #14110d; padding: 36px 16px"
+    >
+      <tr>
+        <td align="center">
+          <table
+            role="presentation"
+            width="100%"
+            cellspacing="0"
+            cellpadding="0"
+            style="
+              max-width: 520px;
+              background-color: #1b1712;
+              border: 1px solid #332c23;
+              border-radius: 12px;
+              overflow: hidden;
+            "
+          >
+            <tr>
+              <td
+                style="
+                  padding: 24px 28px 18px;
+                  border-bottom: 1px solid #332c23;
+                  background-color: #241f18;
+                "
+              >
+                <table role="presentation" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td style="vertical-align: middle; padding-right: 10px">
+                      <img
+                        src="https://macacolive.netlify.app/logo.png"
+                        width="32"
+                        height="32"
+                        alt="MacacoLive"
+                        style="display: block; border-radius: 7px"
+                      />
+                    </td>
+                    <td
+                      style="
+                        vertical-align: middle;
+                        font-size: 18px;
+                        font-weight: 700;
+                        color: #f4ede1;
+                        letter-spacing: -0.02em;
+                      "
+                    >
+                      MacacoLive
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding: 28px">
+                <h1
+                  style="
+                    margin: 0 0 12px;
+                    font-size: 22px;
+                    line-height: 1.25;
+                    font-weight: 700;
+                    color: #f4ede1;
+                  "
+                >
+                  {{ if .Data.nickname }}Fala, {{ .Data.nickname }}!{{ else }}Bem-vindo ao MacacoLive!{{ end }}
+                </h1>
+
+                <p
+                  style="
+                    margin: 0 0 22px;
+                    font-size: 15px;
+                    line-height: 1.6;
+                    color: #b5a893;
+                  "
+                >
+                  Falta só um clique para confirmar seu e-mail
+                  (<strong style="color: #f4ede1">{{ .Email }}</strong>) e liberar
+                  suas salas salvas no <strong style="color: #f4ede1">MacacoLive</strong>.
+                </p>
+
+                <table role="presentation" cellspacing="0" cellpadding="0" style="margin-bottom: 22px">
+                  <tr>
+                    <td style="border-radius: 8px; background-color: #f5c842">
+                      <a
+                        href="https://macacolive.netlify.app/confirm.html?token_hash={{ .TokenHash }}&amp;type=email"
+                        target="_blank"
+                        style="
+                          display: inline-block;
+                          padding: 13px 24px;
+                          font-size: 15px;
+                          font-weight: 700;
+                          color: #1f1608;
+                          text-decoration: none;
+                          border-radius: 8px;
+                        "
+                      >
+                        Finalizar cadastro no MacacoLive
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellspacing="0"
+                  cellpadding="0"
+                  style="
+                    background-color: #241f18;
+                    border: 1px solid #332c23;
+                    border-radius: 8px;
+                    margin-bottom: 18px;
+                  "
+                >
+                  <tr>
+                    <td style="padding: 14px 16px">
+                      <div
+                        style="
+                          font-size: 11px;
+                          text-transform: uppercase;
+                          letter-spacing: 0.08em;
+                          color: #978b7b;
+                          margin-bottom: 4px;
+                        "
+                      >
+                        Código alternativo de verificação
+                      </div>
+                      <div
+                        style="
+                          font-size: 22px;
+                          font-weight: 700;
+                          letter-spacing: 0.18em;
+                          color: #f5c842;
+                          font-family: Consolas, 'Courier New', monospace;
+                        "
+                      >
+                        {{ .Token }}
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+
+                <p style="margin: 0 0 8px; font-size: 12px; line-height: 1.5; color: #978b7b">
+                  Se o botão não abrir, copie e cole este link no navegador:
+                </p>
+                <p
+                  style="
+                    margin: 0;
+                    font-size: 12px;
+                    line-height: 1.5;
+                    color: #b5a893;
+                    word-break: break-all;
+                  "
+                >
+                  https://macacolive.netlify.app/confirm.html?token_hash={{ .TokenHash }}&amp;type=email
+                </p>
+              </td>
+            </tr>
+
+            <tr>
+              <td
+                style="
+                  padding: 16px 28px;
+                  border-top: 1px solid #332c23;
+                  font-size: 12px;
+                  line-height: 1.5;
+                  color: #978b7b;
+                "
+              >
+                Se você não criou uma conta no MacacoLive, pode ignorar este e-mail com segurança.
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

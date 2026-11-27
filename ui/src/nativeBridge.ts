@@ -560,6 +560,18 @@ class NativeBridge {
       await document.exitFullscreen();
     }
   }
+
+  public async setAlwaysOnTop(alwaysOnTop: boolean): Promise<boolean> {
+    if (this.isDesktopApp) {
+      try {
+        const res = await this.callHost<{ alwaysOnTop: boolean }>('setAlwaysOnTop', {
+          alwaysOnTop,
+        });
+        return Boolean(res.alwaysOnTop);
+      } catch {}
+    }
+    return false;
+  }
 }
 
 export const nativeBridge = new NativeBridge();

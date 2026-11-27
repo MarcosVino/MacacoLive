@@ -1,5 +1,6 @@
 {
-  "version": "1.6.0",
-  "url": "https://github.com/MarcosVino/MacacoLive/releases/download/v1.6.0/MacacoLive.exe",
-  "notes": "Contas com Supabase, salas salvas estilo Discord, animações suaves e nova janela visual de compartilhar tela/aplicativo"
+  "version": "1.7.0",
+  "size": "~1.2 MB",
+  "url": "https://github.com/MarcosVino/MacacoLive/releases/download/v1.7.0/MacacoLive.exe",
+  "notes": "Servidores e canais estilo Discord com presença ao vivo, botão de tacar banana animado com som, chat na sala, fixar janela no topo e confirmação em /confirm.html"
 }
