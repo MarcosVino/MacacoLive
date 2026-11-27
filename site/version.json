@@ -1,6 +1,6 @@
 {
-  "version": "1.7.0",
+  "version": "1.7.1",
   "size": "~1.2 MB",
-  "url": "https://github.com/MarcosVino/MacacoLive/releases/download/v1.7.0/MacacoLive.exe",
-  "notes": "Servidores e canais estilo Discord com presença ao vivo, botão de tacar banana animado com som, chat na sala, fixar janela no topo e confirmação em /confirm.html"
+  "url": "https://github.com/MarcosVino/MacacoLive/releases/download/v1.7.1/MacacoLive.exe",
+  "notes": "Acabamento Liquid Glass nos painéis e controles flutuantes, chat ancorado na base, topbar reorganizada e rodapé sem conflito com selo do site"
 }

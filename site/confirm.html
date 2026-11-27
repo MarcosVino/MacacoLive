@@ -195,7 +195,7 @@
       (() => {
         const SUPABASE_URL = 'https://vnraonmtmvxqkcaefkyz.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_LEHXzAr5fHvpmND9G7uJ6w_MPnibo0_';
-        const REDIRECT_TO = 'https://macacolive.netlify.app/confirm.html';
+        const REDIRECT_TO = `${window.location.origin}${window.location.pathname}`;
 
         const views = {
           loading: document.getElementById('state-loading'),

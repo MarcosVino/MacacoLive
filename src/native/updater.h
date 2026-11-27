@@ -20,9 +20,9 @@
 
 namespace updater {
 
-inline constexpr const wchar_t* kAppVersion = L"1.7.0";
+inline constexpr const wchar_t* kAppVersion = L"1.7.1";
 inline constexpr const wchar_t* kDefaultUpdateApiUrl =
-    L"https://macacolive.netlify.app/version.json";
+    L"https://marcosvino.github.io/MacacoLive/version.json";
 
 struct UpdateInfo {
     bool available = false;
@@ -326,11 +326,29 @@ inline bool GetRedirectVersionFallback(std::wstring& outTag, std::wstring& outDo
 
 inline UpdateInfo CheckForUpdates() {
     UpdateInfo info{};
-    std::wstring apiUrl = ResolveUpdateUrl();
-    if (apiUrl.empty()) return info;
+    auto considerCandidate = [&](const std::wstring& rawVer, const std::wstring& dlUrl, const std::wstring& notes) {
+        std::wstring ver = rawVer;
+        if (!ver.empty() && (ver[0] == L'v' || ver[0] == L'V')) {
+            ver.erase(0, 1);
+        }
+        if (ver.empty() || dlUrl.empty()) return;
+        if (info.latestVersion.empty() || IsNewerVersion(ver, info.latestVersion)) {
+            info.latestVersion = ver;
+            info.downloadUrl = dlUrl;
+            if (!notes.empty()) info.notes = notes;
+        }
+    };
 
+    // 1) Check live GitHub /releases/latest HTTP Location header (zero API rate limit, never stale)
+    std::wstring tag, dlUrl;
+    if (GetRedirectVersionFallback(tag, dlUrl)) {
+        considerCandidate(tag, dlUrl, L"");
+    }
+
+    // 2) Also check version.json (or override URL) for release notes or newer manifest
+    std::wstring apiUrl = ResolveUpdateUrl();
     std::vector<uint8_t> raw;
-    if (HttpGetBytes(apiUrl, raw, 512 * 1024)) {
+    if (!apiUrl.empty() && HttpGetBytes(apiUrl, raw, 512 * 1024)) {
         std::string json(reinterpret_cast<const char*>(raw.data()), raw.size());
         std::string verUtf8 = ExtractJsonFieldUtf8(json, "version");
         if (verUtf8.empty()) {
@@ -341,29 +359,12 @@ inline UpdateInfo CheckForUpdates() {
         if (notesUtf8.empty()) {
             notesUtf8 = ExtractJsonFieldUtf8(json, "name");
         }
-
         if (!verUtf8.empty() && !dlUtf8.empty()) {
-            std::wstring remoteVer = Utf8ToWide(verUtf8);
-            if (!remoteVer.empty() && (remoteVer[0] == L'v' || remoteVer[0] == L'V')) {
-                remoteVer.erase(0, 1);
-            }
-            info.latestVersion = remoteVer;
-            info.downloadUrl = Utf8ToWide(dlUtf8);
-            info.notes = Utf8ToWide(notesUtf8);
-            info.available = IsNewerVersion(info.latestVersion, info.currentVersion);
-            return info;
+            considerCandidate(Utf8ToWide(verUtf8), Utf8ToWide(dlUtf8), Utf8ToWide(notesUtf8));
         }
     }
 
-    // Fallback when api.github.com hits unauthenticated IP rate limit (60/hr): read /releases/latest Location header
-    std::wstring tag, dlUrl;
-    if (GetRedirectVersionFallback(tag, dlUrl)) {
-        std::wstring remoteVer = tag;
-        if (!remoteVer.empty() && (remoteVer[0] == L'v' || remoteVer[0] == L'V')) {
-            remoteVer.erase(0, 1);
-        }
-        info.latestVersion = remoteVer;
-        info.downloadUrl = dlUrl;
+    if (!info.latestVersion.empty()) {
         info.available = IsNewerVersion(info.latestVersion, info.currentVersion);
     }
     return info;

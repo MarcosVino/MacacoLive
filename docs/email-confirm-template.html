@@ -48,7 +48,7 @@
                   <tr>
                     <td style="vertical-align: middle; padding-right: 10px">
                       <img
-                        src="https://macacolive.netlify.app/logo.png"
+                        src="{{ .SiteURL }}/logo.png"
                         width="32"
                         height="32"
                         alt="MacacoLive"
@@ -102,7 +102,7 @@
                   <tr>
                     <td style="border-radius: 8px; background-color: #f5c842">
                       <a
-                        href="https://macacolive.netlify.app/confirm.html?token_hash={{ .TokenHash }}&amp;type=email"
+                        href="{{ .SiteURL }}/confirm.html?token_hash={{ .TokenHash }}&amp;type=email"
                         target="_blank"
                         style="
                           display: inline-block;
@@ -172,7 +172,7 @@
                     word-break: break-all;
                   "
                 >
-                  https://macacolive.netlify.app/confirm.html?token_hash={{ .TokenHash }}&amp;type=email
+                  {{ .SiteURL }}/confirm.html?token_hash={{ .TokenHash }}&amp;type=email
                 </p>
               </td>
             </tr>

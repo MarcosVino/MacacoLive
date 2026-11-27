@@ -321,8 +321,10 @@ button {
   height: 56px;
   flex-shrink: 0;
   padding: 0 var(--s-5);
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
+  border-bottom: 1px solid rgba(255, 245, 224, 0.08);
+  background: rgba(24, 20, 15, 0.72);
+  backdrop-filter: blur(20px) saturate(135%);
+  box-shadow: inset 0 1px 0 rgba(255, 245, 224, 0.06);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -341,8 +343,9 @@ button {
   gap: var(--s-2);
   height: 34px;
   padding: 0 var(--s-3) 0 4px;
-  background: var(--raised);
-  border: 1px solid var(--line);
+  background: rgba(255, 245, 224, 0.05);
+  border: 1px solid rgba(255, 245, 224, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 245, 224, 0.08);
   border-radius: var(--r-md);
   font-size: 13px;
 }
@@ -356,6 +359,10 @@ button {
   align-items: center;
   justify-content: safe center;
   padding: var(--s-5);
+  background:
+    radial-gradient(880px 480px at 14% 6%, rgba(245, 200, 66, 0.065), transparent 62%),
+    radial-gradient(720px 460px at 88% 92%, rgba(141, 191, 106, 0.045), transparent 60%),
+    var(--bg);
 }
 
 .lobby-grid {
@@ -364,12 +371,17 @@ button {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--s-6);
-  align-items: start;
+  align-items: stretch;
 }
 
 .lobby-card {
-  background: var(--surface);
-  border: 1px solid var(--line);
+  background: linear-gradient(168deg, rgba(35, 29, 22, 0.78) 0%, rgba(22, 18, 14, 0.72) 100%);
+  backdrop-filter: blur(22px) saturate(134%);
+  border: 1px solid rgba(255, 245, 224, 0.09);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 245, 224, 0.11),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+    0 18px 44px rgba(0, 0, 0, 0.34);
   border-radius: var(--r-lg);
   padding: var(--s-5);
   display: flex;
@@ -516,10 +528,12 @@ button {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: var(--s-4);
+  gap: var(--s-3);
   padding: 0 var(--s-3) 0 var(--s-4);
-  background: var(--surface);
-  border-bottom: 1px solid var(--line);
+  background: rgba(23, 19, 14, 0.76);
+  backdrop-filter: blur(20px) saturate(136%);
+  border-bottom: 1px solid rgba(255, 245, 224, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 245, 224, 0.07);
   transition:
     opacity 200ms var(--ease-out),
     transform 200ms var(--ease-out);
@@ -561,14 +575,26 @@ button {
   background: var(--danger);
 }
 
-.topbar-stats {
+.topbar-stats-slot {
   flex: 1;
+  min-width: 0;
   display: flex;
   justify-content: center;
-  gap: var(--s-4);
+}
+
+.topbar-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(255, 245, 224, 0.045);
+  border: 1px solid rgba(255, 245, 224, 0.09);
+  box-shadow: inset 0 1px 0 rgba(255, 245, 224, 0.06);
   font-size: 12px;
   color: var(--text-2);
-  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .topbar-stats span strong {
@@ -579,13 +605,29 @@ button {
 .topbar-actions {
   display: flex;
   align-items: center;
-  gap: var(--s-1);
+  gap: var(--s-2);
   margin-left: auto;
 }
 
 .topbar-actions .btn-primary,
 .topbar-actions .btn-danger {
-  margin-right: var(--s-2);
+  margin-right: 0;
+}
+
+.icon-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r-md);
+  background: rgba(255, 245, 224, 0.04);
+  border: 1px solid rgba(255, 245, 224, 0.08);
+}
+
+.icon-cluster .btn-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
 }
 
 .banner {
@@ -730,12 +772,16 @@ button {
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  height: 48px;
+  height: 50px;
   padding: 0 var(--s-2) 0 var(--s-3);
-  border-radius: var(--r-lg);
-  background: rgba(20, 17, 13, 0.86);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(32, 26, 20, 0.62) 0%, rgba(18, 15, 11, 0.72) 100%);
+  backdrop-filter: blur(26px) saturate(165%);
+  border: 1px solid rgba(255, 245, 224, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 245, 224, 0.18),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+    0 16px 40px rgba(0, 0, 0, 0.55);
   z-index: 15;
   transition:
     opacity 200ms var(--ease-out),
@@ -819,9 +865,11 @@ button {
   gap: var(--s-2);
   height: 32px;
   padding: 0 var(--s-3);
-  border-radius: var(--r-md);
-  background: var(--surface);
-  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(24, 19, 14, 0.68);
+  backdrop-filter: blur(18px) saturate(145%);
+  border: 1px solid rgba(255, 245, 224, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 245, 224, 0.14), 0 8px 24px rgba(0, 0, 0, 0.4);
   font-size: 13px;
   max-width: 220px;
   animation: toast 3s var(--ease-out) forwards;
@@ -855,13 +903,41 @@ button {
 .sidebar {
   width: 320px;
   flex-shrink: 0;
-  background: var(--surface);
-  border-left: 1px solid var(--line);
+  background: rgba(24, 20, 15, 0.82);
+  backdrop-filter: blur(20px) saturate(132%);
+  border-left: 1px solid rgba(255, 245, 224, 0.08);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-people-layout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.side-section-people {
+  max-height: 250px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--line-strong) transparent;
+}
+
+.side-section-chat {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+.sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
 }
 
 .side-section {
@@ -1088,7 +1164,8 @@ button {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(8, 7, 5, 0.85);
+  background: rgba(9, 7, 5, 0.72);
+  backdrop-filter: blur(10px);
   display: grid;
   place-items: center;
   padding: var(--s-4);
@@ -1100,13 +1177,16 @@ button {
   width: 100%;
   max-width: 660px;
   max-height: min(88vh, 720px);
-  background: #1b1712;
-  border: 1px solid var(--line-strong);
+  background: linear-gradient(168deg, rgba(33, 27, 21, 0.9) 0%, rgba(22, 18, 14, 0.92) 100%);
+  backdrop-filter: blur(28px) saturate(140%);
+  border: 1px solid rgba(255, 245, 224, 0.13);
   border-radius: var(--r-lg);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 28px 64px rgba(0, 0, 0, 0.65);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 245, 224, 0.12),
+    0 28px 72px rgba(0, 0, 0, 0.68);
   animation: modalPanelIn 230ms var(--ease-out) both;
 }
 
@@ -1352,6 +1432,12 @@ button {
   gap: var(--s-2);
 }
 
+@media (max-width: 1020px) {
+  .topbar-stats-slot {
+    display: none;
+  }
+}
+
 @media (max-width: 780px) {
   .lobby-grid {
     grid-template-columns: 1fr;
@@ -1397,8 +1483,12 @@ button {
 .server-rail {
   width: 66px;
   flex-shrink: 0;
-  background: var(--surface);
-  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(31, 26, 20, 0.78) 0%, rgba(22, 18, 14, 0.74) 100%);
+  backdrop-filter: blur(22px) saturate(134%);
+  border: 1px solid rgba(255, 245, 224, 0.09);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 245, 224, 0.11),
+    0 18px 44px rgba(0, 0, 0, 0.34);
   border-radius: var(--r-lg);
   padding: 12px 10px;
   display: flex;
@@ -1489,8 +1579,13 @@ button {
 
 .server-panel,
 .roster-panel {
-  background: var(--surface);
-  border: 1px solid var(--line);
+  background: linear-gradient(168deg, rgba(35, 29, 22, 0.78) 0%, rgba(22, 18, 14, 0.72) 100%);
+  backdrop-filter: blur(22px) saturate(134%);
+  border: 1px solid rgba(255, 245, 224, 0.09);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 245, 224, 0.11),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+    0 18px 44px rgba(0, 0, 0, 0.34);
   border-radius: var(--r-lg);
   padding: var(--s-5);
   display: flex;
@@ -1736,8 +1831,9 @@ button {
 .room-channel-rail {
   width: 214px;
   flex-shrink: 0;
-  background: var(--surface);
-  border-right: 1px solid var(--line);
+  background: rgba(23, 19, 14, 0.8);
+  backdrop-filter: blur(20px) saturate(132%);
+  border-right: 1px solid rgba(255, 245, 224, 0.08);
   display: flex;
   flex-direction: column;
   padding: var(--s-3);
@@ -1813,22 +1909,25 @@ button {
 
 /* Room Chat Panel */
 .chat-wrap {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--s-2);
 }
 
 .chat-log {
-  max-height: 220px;
-  min-height: 110px;
+  flex: 1;
+  min-height: 120px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 8px;
+  padding: 10px;
   border-radius: var(--r-md);
-  background: var(--bg);
-  border: 1px solid var(--line);
+  background: rgba(14, 11, 8, 0.65);
+  border: 1px solid rgba(255, 245, 224, 0.08);
+  box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.35);
   scrollbar-width: thin;
   scrollbar-color: var(--line-strong) transparent;
 }
@@ -1878,16 +1977,19 @@ button {
   height: 32px;
   padding: 0 12px;
   border-radius: var(--r-md);
-  background: linear-gradient(180deg, #ffe06b 0%, #f5c842 100%);
+  background: linear-gradient(180deg, #ffe376 0%, #f5c842 100%);
   color: var(--on-banana);
   border: 1px solid #d7a625;
   font-weight: 700;
   font-size: 12.5px;
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(245, 200, 66, 0.24);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.52),
+    0 5px 16px rgba(245, 200, 66, 0.22);
   transition:
     transform 120ms var(--ease-out),
     filter 140ms var(--ease-out);
@@ -1930,10 +2032,12 @@ button {
 
 .banana-tag {
   margin-top: -12px;
-  padding: 2px 8px;
+  padding: 3px 9px;
   border-radius: 999px;
-  background: rgba(20, 17, 13, 0.9);
-  border: 1px solid rgba(245, 200, 66, 0.45);
+  background: rgba(20, 16, 12, 0.72);
+  backdrop-filter: blur(14px) saturate(145%);
+  border: 1px solid rgba(245, 200, 66, 0.48);
+  box-shadow: inset 0 1px 0 rgba(255, 245, 224, 0.14);
   color: #f4ede1;
   font-size: 11px;
   font-weight: 700;
@@ -1978,12 +2082,15 @@ button {
   gap: 8px;
   padding: 7px 14px;
   border-radius: 999px;
-  background: rgba(20, 17, 13, 0.92);
-  border: 1px solid rgba(245, 200, 66, 0.55);
+  background: rgba(20, 16, 12, 0.66);
+  backdrop-filter: blur(22px) saturate(155%);
+  border: 1px solid rgba(245, 200, 66, 0.5);
   color: var(--text);
   font-size: 13px;
   white-space: nowrap;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 245, 224, 0.18),
+    0 12px 30px rgba(0, 0, 0, 0.45);
   animation: bananaBannerIn 2.2s var(--ease-out) forwards;
 }
 

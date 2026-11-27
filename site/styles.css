@@ -502,9 +502,18 @@ a {
 
 .footer-inner {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  padding-right: 190px;
+}
+
+@media (max-width: 640px) {
+  .footer-inner {
+    padding-right: 0;
+    padding-bottom: 54px;
+  }
 }
 
 .footer a:hover {

@@ -82,8 +82,8 @@ import {
 } from './types';
 import { MacacoWebRtcEngine } from './webrtcEngine';
 
-const APP_VERSION = '1.7.0';
-const CONFIRM_REDIRECT_URL = 'https://macacolive.netlify.app/confirm.html';
+const APP_VERSION = '1.7.1';
+const CONFIRM_REDIRECT_URL = 'https://marcosvino.github.io/MacacoLive/confirm.html';
 
 interface FloatingReaction {
   id: string;
@@ -1572,20 +1572,16 @@ export function App() {
           </button>
         </div>
 
-        <div
-          className="topbar-stats num"
-          title={
-            stats
-              ? `Codec: ${stats.codec} · Rota: ${stats.routeType}${
-                  stats.limitation && stats.limitation !== 'none'
-                    ? ` · Limite: ${stats.limitation}`
-                    : ''
-                }`
-              : undefined
-          }
-        >
+        <div className="topbar-stats-slot">
           {stats && (
-            <>
+            <div
+              className="topbar-stats num"
+              title={`Codec: ${stats.codec} · Rota: ${stats.routeType}${
+                stats.limitation && stats.limitation !== 'none'
+                  ? ` · Limite: ${stats.limitation}`
+                  : ''
+              }`}
+            >
               <span>
                 <strong>{stats.height > 0 ? `${stats.height}p` : '…'}</strong>
               </span>
@@ -1603,7 +1599,7 @@ export function App() {
                   <strong style={{ color: 'inherit' }}>{stats.packetLossPct}%</strong> perda
                 </span>
               )}
-            </>
+            </div>
           )}
         </div>
 
@@ -1635,7 +1631,6 @@ export function App() {
           <button
             type="button"
             className="btn btn-banana"
-            style={{ marginRight: 6 }}
             onClick={() => void throwBanana()}
             title="Tacar banana na tela de todo mundo (Atalho: B)"
           >
@@ -1652,50 +1647,52 @@ export function App() {
             </button>
           ) : null}
 
-          {nativeBridge.isDesktopApp && (
+          <div className="icon-cluster">
+            {nativeBridge.isDesktopApp && (
+              <button
+                type="button"
+                className="btn btn-icon"
+                onClick={() => void toggleAlwaysOnTop()}
+                title={alwaysOnTop ? 'Desafixar do topo' : 'Fixar janela no topo (Mini-player)'}
+                aria-label="Fixar janela no topo"
+              >
+                {alwaysOnTop ? <PinOff size={15} color="var(--banana)" /> : <Pin size={15} />}
+              </button>
+            )}
+
             <button
               type="button"
               className="btn btn-icon"
-              onClick={() => void toggleAlwaysOnTop()}
-              title={alwaysOnTop ? 'Desafixar do topo' : 'Fixar janela no topo (Mini-player)'}
-              aria-label="Fixar janela no topo"
+              onClick={toggleJokeSoundsMuted}
+              title={jokeSoundsMuted ? 'Ativar som da banana e chat' : 'Silenciar som da banana e chat'}
+              aria-label="Alternar sons de efeito"
             >
-              {alwaysOnTop ? <PinOff size={16} color="var(--banana)" /> : <Pin size={16} />}
+              {jokeSoundsMuted ? <BellOff size={15} /> : <Bell size={15} />}
             </button>
-          )}
 
-          <button
-            type="button"
-            className="btn btn-icon"
-            onClick={toggleJokeSoundsMuted}
-            title={jokeSoundsMuted ? 'Ativar som da banana e chat' : 'Silenciar som da banana e chat'}
-            aria-label="Alternar sons de efeito"
-          >
-            {jokeSoundsMuted ? <BellOff size={16} /> : <Bell size={16} />}
-          </button>
-
-          <button
-            type="button"
-            className="btn btn-icon"
-            onClick={() => {
-              const next = !sidebarOpen;
-              setSidebarOpen(next);
-              if (next && sidebarTab === 'people') setUnreadChat(false);
-            }}
-            title={sidebarOpen ? 'Esconder painel' : 'Mostrar painel'}
-            aria-label={sidebarOpen ? 'Esconder painel' : 'Mostrar painel'}
-          >
-            {sidebarOpen ? <PanelRightClose size={17} /> : <PanelRightOpen size={17} />}
-          </button>
-          <button
-            type="button"
-            className="btn btn-icon"
-            onClick={handleLeaveRoom}
-            title="Sair da sala"
-            aria-label="Sair da sala"
-          >
-            <LogOut size={16} />
-          </button>
+            <button
+              type="button"
+              className="btn btn-icon"
+              onClick={() => {
+                const next = !sidebarOpen;
+                setSidebarOpen(next);
+                if (next && sidebarTab === 'people') setUnreadChat(false);
+              }}
+              title={sidebarOpen ? 'Esconder painel' : 'Mostrar painel'}
+              aria-label={sidebarOpen ? 'Esconder painel' : 'Mostrar painel'}
+            >
+              {sidebarOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
+            </button>
+            <button
+              type="button"
+              className="btn btn-icon"
+              onClick={handleLeaveRoom}
+              title="Sair da sala"
+              aria-label="Sair da sala"
+            >
+              <LogOut size={15} />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -1896,8 +1893,8 @@ export function App() {
             </div>
 
             {sidebarTab === 'people' ? (
-              <>
-                <section className="side-section">
+              <div className="sidebar-people-layout">
+                <section className="side-section side-section-people">
                   <h3 className="side-title">
                     Na sala
                     <small className="num">{countLabel(peers.length + 1, 'pessoa', 'pessoas')}</small>
@@ -1953,16 +1950,17 @@ export function App() {
                   )}
                 </section>
 
-                <section className="side-section">
+                <section className="side-section side-section-chat">
                   <h3 className="side-title">
                     Chat da sala
                     <small>Ao vivo</small>
                   </h3>
                   <RoomChat messages={chatMessages} onSend={sendChat} />
                 </section>
-              </>
+              </div>
             ) : (
-              <section className="side-section">
+              <div className="sidebar-scroll">
+                <section className="side-section">
                 <h3 className="side-title">
                   Transmissão
                   {localStream && <small style={{ color: 'var(--leaf)' }}>Ao vivo, muda na hora</small>}
@@ -2192,6 +2190,7 @@ export function App() {
                   </span>
                 </label>
               </section>
+              </div>
             )}
           </aside>
         )}
