@@ -1,0 +1,10 @@
+node_modules/
+dist/
+src/MacacoLive.App/bin/
+src/MacacoLive.App/obj/
+src/MacacoLive.App/wwwroot/
+src/native/embedded_assets.h
+*.obj
+*.res
+*.pdb
+*.log
