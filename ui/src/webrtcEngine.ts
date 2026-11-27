@@ -322,37 +322,68 @@ export class MacacoWebRtcEngine {
     const useBrowserSystemAudio =
       !nativeBridge.isDesktopApp && config.audioMode !== 'none';
 
-    const displayStream = await navigator.mediaDevices.getDisplayMedia({
-      video: {
-        // Use ideal (not strict max) so Chromium avoids extra CPU downscale/frame drops in heavy games
-        ...(dims.width ? { width: { ideal: dims.width } } : {}),
-        ...(dims.height ? { height: { ideal: dims.height } } : {}),
-        frameRate: { ideal: config.fps },
-        // @ts-ignore - Hint monitor capture first for fullscreen games
-        displaySurface: config.profile === 'cinema' ? 'monitor' : undefined,
-      },
-      audio: useBrowserSystemAudio
-        ? {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-            channelCount: 2,
-            sampleRate: 48000,
-          }
-        : false,
-    });
+    let displayStream: MediaStream | null = null;
+    let videoTrack: MediaStreamTrack | null = null;
+    let usingDxgi = false;
 
-    // If user left the room while picker dialog was open, immediately release capture
+    if (
+      config.captureSource === 'dxgi-monitor' &&
+      nativeBridge.supportsNativeDxgiTrack
+    ) {
+      try {
+        videoTrack = await nativeBridge.startNativeDxgiVideoTrack(
+          config.monitorIndex,
+          dims.width || 0,
+          dims.height || 0,
+          config.fps
+        );
+        usingDxgi = true;
+      } catch {
+        // Fallback to standard picker if DXGI fails on a specific driver
+        usingDxgi = false;
+      }
+    }
+
+    if (!videoTrack) {
+      displayStream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          // Use ideal (not strict max) so Chromium avoids extra CPU downscale/frame drops in heavy games
+          ...(dims.width ? { width: { ideal: dims.width } } : {}),
+          ...(dims.height ? { height: { ideal: dims.height } } : {}),
+          frameRate: { ideal: config.fps },
+          // @ts-ignore - Hint monitor capture first for fullscreen games
+          displaySurface: config.profile === 'cinema' ? 'monitor' : undefined,
+        },
+        audio: useBrowserSystemAudio
+          ? {
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+              channelCount: 2,
+              sampleRate: 48000,
+            }
+          : false,
+      });
+
+      // If user left the room while picker dialog was open, immediately release capture
+      if (this.isLeaving) {
+        displayStream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+
+      this.rawDisplayStream = displayStream;
+      videoTrack = displayStream.getVideoTracks()[0] || null;
+    }
+
     if (this.isLeaving) {
-      displayStream.getTracks().forEach((t) => t.stop());
+      if (displayStream) displayStream.getTracks().forEach((t) => t.stop());
+      if (usingDxgi) await nativeBridge.stopNativeDxgiVideoTrack();
+      this.rawDisplayStream = null;
       return;
     }
 
-    this.rawDisplayStream = displayStream;
-
-    const videoTrack = displayStream.getVideoTracks()[0];
     if (!videoTrack) {
-      displayStream.getTracks().forEach((t) => t.stop());
+      if (displayStream) displayStream.getTracks().forEach((t) => t.stop());
       this.rawDisplayStream = null;
       throw new Error('Nenhuma tela ou janela foi selecionada.');
     }
@@ -367,7 +398,7 @@ export class MacacoWebRtcEngine {
     }
 
     let audioTrack: MediaStreamTrack | null =
-      displayStream.getAudioTracks()[0] || null;
+      displayStream?.getAudioTracks()[0] || null;
     let audioStatus = audioTrack ? 'Som do sistema' : 'Sem som';
 
     if (nativeBridge.isDesktopApp && config.audioMode !== 'none') {
@@ -385,7 +416,8 @@ export class MacacoWebRtcEngine {
 
     // Re-check in case user exited while audio capture was starting
     if (this.isLeaving) {
-      displayStream.getTracks().forEach((t) => t.stop());
+      if (displayStream) displayStream.getTracks().forEach((t) => t.stop());
+      if (usingDxgi) await nativeBridge.stopNativeDxgiVideoTrack();
       if (audioTrack) audioTrack.stop();
       this.rawDisplayStream = null;
       await nativeBridge.stopNativeAudioTrack();
@@ -416,13 +448,27 @@ export class MacacoWebRtcEngine {
       this.localVideoTrack.contentHint =
         config.profile === 'cinema' ? 'motion' : 'detail';
       const dims = getResolutionDimensions(config.resolution);
-      try {
-        await this.localVideoTrack.applyConstraints({
-          ...(dims.width ? { width: { ideal: dims.width } } : {}),
-          ...(dims.height ? { height: { ideal: dims.height } } : {}),
-          frameRate: { ideal: config.fps },
-        });
-      } catch {}
+      if (
+        config.captureSource === 'dxgi-monitor' &&
+        nativeBridge.supportsNativeDxgiTrack &&
+        !this.rawDisplayStream
+      ) {
+        try {
+          await nativeBridge.updateNativeDxgiVideo(
+            dims.width || 0,
+            dims.height || 0,
+            config.fps
+          );
+        } catch {}
+      } else {
+        try {
+          await this.localVideoTrack.applyConstraints({
+            ...(dims.width ? { width: { ideal: dims.width } } : {}),
+            ...(dims.height ? { height: { ideal: dims.height } } : {}),
+            frameRate: { ideal: config.fps },
+          });
+        } catch {}
+      }
     }
 
     if (audioChanged && this.localStream && nativeBridge.isDesktopApp) {
@@ -501,7 +547,10 @@ export class MacacoWebRtcEngine {
 
     this.callbacks.onLocalStreamChanged(null, '');
 
-    // 2. Stop native WASAPI capture and reset process priority boost
+    // 2. Stop native DXGI video + WASAPI audio capture and reset process priority boost
+    try {
+      await nativeBridge.stopNativeDxgiVideoTrack();
+    } catch {}
     try {
       await nativeBridge.stopNativeAudioTrack();
     } catch {}

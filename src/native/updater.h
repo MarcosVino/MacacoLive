@@ -20,7 +20,7 @@
 
 namespace updater {
 
-inline constexpr const wchar_t* kAppVersion = L"1.4.0";
+inline constexpr const wchar_t* kAppVersion = L"1.5.0";
 inline constexpr const wchar_t* kDefaultUpdateApiUrl =
     L"https://api.github.com/repos/MarcosVino/MacacoLive/releases/latest";
 

@@ -28,6 +28,8 @@ import { nativeBridge } from './nativeBridge';
 import {
   AudioCaptureMode,
   AudioProcessInfo,
+  CaptureSource,
+  MonitorInfo,
   PeerInfo,
   ResolutionPreset,
   StreamQualityConfig,
@@ -43,6 +45,8 @@ interface FloatingReaction {
 }
 
 const DEFAULT_QUALITY: StreamQualityConfig = {
+  captureSource: 'dxgi-monitor',
+  monitorIndex: 0,
   resolution: '1080p',
   fps: 60,
   bitrateMbps: 12,
@@ -88,6 +92,7 @@ export function App() {
   const [copied, setCopied] = useState(false);
 
   const [quality, setQuality] = useState<StreamQualityConfig>(DEFAULT_QUALITY);
+  const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
   const [audioProcesses, setAudioProcesses] = useState<AudioProcessInfo[]>([]);
   const [discordDetected, setDiscordDetected] = useState(false);
   const [audioStatus, setAudioStatus] = useState('');
@@ -158,9 +163,13 @@ export function App() {
 
   const refreshAudioApps = async () => {
     try {
-      const info = await nativeBridge.listAudioApps();
+      const [info, mons] = await Promise.all([
+        nativeBridge.listAudioApps(),
+        nativeBridge.listMonitors(),
+      ]);
       setAudioProcesses(info.processes);
       setDiscordDetected(info.discordRunning);
+      setMonitors(mons);
       if (quality.audioMode === 'include-process' && quality.targetPid === 0 && info.processes.length > 0) {
         setQuality((q) => ({ ...q, targetPid: info.processes[0].pid }));
       }
@@ -378,11 +387,18 @@ export function App() {
   };
 
   const applyQualityChange = async (patch: Partial<StreamQualityConfig>) => {
+    const sourceChanged =
+      (patch.captureSource && patch.captureSource !== quality.captureSource) ||
+      (patch.monitorIndex !== undefined && patch.monitorIndex !== quality.monitorIndex);
     const next = { ...quality, ...patch };
     setQuality(next);
     if (engineRef.current && localStream) {
-      const label = await engineRef.current.updateLiveQuality(next);
-      if (label) setAudioStatus(label);
+      if (sourceChanged) {
+        await engineRef.current.startScreenShare(next);
+      } else {
+        const label = await engineRef.current.updateLiveQuality(next);
+        if (label) setAudioStatus(label);
+      }
     }
   };
 
@@ -490,7 +506,7 @@ export function App() {
           </button>
 
           <p className="lobby-foot">
-            O vídeo vai direto do PC de quem transmite para quem assiste. A senha criptografa o convite da sala. · v1.4.0
+            O vídeo vai direto do PC de quem transmite para quem assiste. A senha criptografa o convite da sala. · v1.5.0
           </p>
 
           {updateInfo?.available && (
@@ -957,10 +973,56 @@ export function App() {
                     PC fraco
                   </button>
                 </div>
-                <span className="field-hint">
-                  No Valorant, use <strong>Janela sem Bordas</strong> nas opções de vídeo para não travar ao dar Alt+Tab.
-                </span>
               </div>
+
+              {nativeBridge.supportsNativeDxgiTrack && (
+                <div className="field">
+                  <span className="field-label">Captura</span>
+                  <div className="segmented" role="group" aria-label="Modo de captura">
+                    <button
+                      type="button"
+                      className="seg"
+                      aria-pressed={quality.captureSource === 'dxgi-monitor'}
+                      onClick={() =>
+                        void applyQualityChange({ captureSource: 'dxgi-monitor' as CaptureSource })
+                      }
+                    >
+                      Monitor DXGI (Jogos)
+                    </button>
+                    <button
+                      type="button"
+                      className="seg"
+                      aria-pressed={quality.captureSource === 'window-picker'}
+                      onClick={() =>
+                        void applyQualityChange({ captureSource: 'window-picker' as CaptureSource })
+                      }
+                    >
+                      Escolher janela
+                    </button>
+                  </div>
+                  {quality.captureSource === 'dxgi-monitor' && monitors.length > 0 && (
+                    <select
+                      className="select"
+                      value={quality.monitorIndex}
+                      onChange={(e) =>
+                        void applyQualityChange({ monitorIndex: Number(e.target.value) })
+                      }
+                      aria-label="Monitor"
+                    >
+                      {monitors.map((m) => (
+                        <option key={m.index} value={m.index}>
+                          {m.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <span className="field-hint">
+                    {quality.captureSource === 'dxgi-monitor'
+                      ? 'Captura direto da GPU sem congelar em tela cheia ou Alt+Tab.'
+                      : 'Abre o seletor do Windows para capturar só uma janela.'}
+                  </span>
+                </div>
+              )}
 
               <div className="field">
                 <span className="field-label">Conteúdo</span>

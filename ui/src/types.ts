@@ -5,6 +5,16 @@ export interface AudioProcessInfo {
   isDiscord: boolean;
 }
 
+export interface MonitorInfo {
+  index: number;
+  name: string;
+  width: number;
+  height: number;
+  primary: boolean;
+}
+
+export type CaptureSource = 'dxgi-monitor' | 'window-picker';
+
 export type AudioCaptureMode =
   | 'exclude-discord'
   | 'include-process'
@@ -16,6 +26,8 @@ export type StreamProfile = 'cinema' | 'detail';
 export type ResolutionPreset = '720p' | '1080p' | '1440p' | 'native';
 
 export interface StreamQualityConfig {
+  captureSource: CaptureSource;
+  monitorIndex: number;
   resolution: ResolutionPreset;
   fps: 30 | 60;
   bitrateMbps: number;

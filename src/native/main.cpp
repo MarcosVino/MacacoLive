@@ -17,6 +17,7 @@
 #include "WebView2.h"
 #include "WebView2EnvironmentOptions.h"
 #include "audio_loopback.h"
+#include "dxgi_capture.h"
 #include "embedded_assets.h"
 #include "updater.h"
 
@@ -286,8 +287,8 @@ private:
             L"--disable-background-timer-throttling "
             L"--disable-renderer-backgrounding "
             L"--disable-backgrounding-occluded-windows "
-            L"--enable-features=MediaFoundationD3D11VideoCapture,AllowWgcScreenCapturer "
-            L"--disable-features=CalculateNativeWinOcclusion,IntensiveWakeUpThrottling,WebRtcHideLocalIpsWithMdns,UseEcoQoSForBackgroundProcess,AllowWgcZeroHz "
+            L"--enable-features=MediaFoundationD3D11VideoCapture,MediaFoundationD3D11VideoCaptureZeroCopy "
+            L"--disable-features=CalculateNativeWinOcclusion,IntensiveWakeUpThrottling,WebRtcHideLocalIpsWithMdns,UseEcoQoSForBackgroundProcess,WGCScreenCapture "
             L"--autoplay-policy=no-user-gesture-required "
             L"--enable-gpu-rasterization "
             L"--enable-zero-copy "
@@ -400,7 +401,7 @@ private:
                 .Get(),
             nullptr);
 
-        // Allocate shared ring buffer for 48kHz stereo PCM audio
+        // Allocate shared ring buffer for 48kHz stereo PCM audio and double-buffered GPU NV12 video
         ComPtr<ICoreWebView2Environment12> env12;
         if (SUCCEEDED(m_env.As(&env12))) {
             if (SUCCEEDED(env12->CreateSharedBuffer(AudioLoopbackService::SharedBufferTotalBytes, &m_sharedBuffer)) && m_sharedBuffer) {
@@ -413,6 +414,13 @@ private:
                             delete heapCopy;
                         }
                     });
+                }
+            }
+
+            if (SUCCEEDED(env12->CreateSharedBuffer(DxgiCaptureService::SharedBufferTotalBytes, &m_videoSharedBuffer)) && m_videoSharedBuffer) {
+                BYTE* rawVid = nullptr;
+                if (SUCCEEDED(m_videoSharedBuffer->get_Buffer(&rawVid)) && rawVid) {
+                    m_dxgiService = std::make_unique<DxgiCaptureService>(rawVid);
                 }
             }
         }
@@ -433,15 +441,7 @@ private:
         m_webview->add_NavigationCompleted(
             Callback<ICoreWebView2NavigationCompletedEventHandler>(
                 [this](ICoreWebView2*, ICoreWebView2NavigationCompletedEventArgs*) -> HRESULT {
-                    if (m_sharedBuffer) {
-                        ComPtr<ICoreWebView2_17> wv17;
-                        if (SUCCEEDED(m_webview.As(&wv17))) {
-                            wv17->PostSharedBufferToScript(
-                                m_sharedBuffer.Get(),
-                                COREWEBVIEW2_SHARED_BUFFER_ACCESS_READ_ONLY,
-                                L"{}");
-                        }
-                    }
+                    PostAllSharedBuffers();
                     return S_OK;
                 })
                 .Get(),
@@ -509,20 +509,80 @@ private:
         return S_OK;
     }
 
+    void PostAllSharedBuffers() {
+        if (!m_webview) return;
+        ComPtr<ICoreWebView2_17> wv17;
+        if (FAILED(m_webview.As(&wv17)) || !wv17) return;
+        if (m_sharedBuffer) {
+            wv17->PostSharedBufferToScript(
+                m_sharedBuffer.Get(),
+                COREWEBVIEW2_SHARED_BUFFER_ACCESS_READ_ONLY,
+                L"{\"kind\":\"audio\"}");
+        }
+        if (m_videoSharedBuffer) {
+            wv17->PostSharedBufferToScript(
+                m_videoSharedBuffer.Get(),
+                COREWEBVIEW2_SHARED_BUFFER_ACCESS_READ_ONLY,
+                L"{\"kind\":\"video\"}");
+        }
+    }
+
     void HandleWebMessage(const std::wstring& json) {
         std::wstring cmd = json_mini::ExtractString(json, L"cmd");
         std::wstring reqId = json_mini::ExtractString(json, L"requestId");
 
         if (cmd == L"requestSharedBuffer") {
-            if (m_sharedBuffer && m_webview) {
-                ComPtr<ICoreWebView2_17> wv17;
-                if (SUCCEEDED(m_webview.As(&wv17))) {
-                    wv17->PostSharedBufferToScript(
-                        m_sharedBuffer.Get(),
-                        COREWEBVIEW2_SHARED_BUFFER_ACCESS_READ_ONLY,
-                        L"{}");
-                }
+            PostAllSharedBuffers();
+            ReplySuccess(reqId, L"{\"ok\":true}");
+            return;
+        }
+
+        if (cmd == L"listMonitors") {
+            auto mons = DxgiCaptureService::ListMonitors();
+            std::wstring data = L"{\"monitors\":[";
+            for (size_t i = 0; i < mons.size(); ++i) {
+                if (i > 0) data += L",";
+                data += L"{\"index\":" + std::to_wstring(mons[i].index) +
+                        L",\"name\":\"" + json_mini::JsonEscape(mons[i].name) +
+                        L"\",\"width\":" + std::to_wstring(mons[i].width) +
+                        L",\"height\":" + std::to_wstring(mons[i].height) +
+                        L",\"primary\":" + (mons[i].primary ? L"true" : L"false") + L"}";
             }
+            data += L"]}";
+            ReplySuccess(reqId, data);
+            return;
+        }
+
+        if (cmd == L"startDxgiCapture") {
+            if (!m_dxgiService) {
+                ReplyError(reqId, L"Captura DXGI não inicializada.");
+                return;
+            }
+            int monitorIndex = json_mini::ExtractInt(json, L"monitorIndex", 0);
+            int maxWidth = json_mini::ExtractInt(json, L"maxWidth", 1920);
+            int maxHeight = json_mini::ExtractInt(json, L"maxHeight", 1080);
+            int fps = json_mini::ExtractInt(json, L"fps", 60);
+            if (m_dxgiService->Start(monitorIndex, maxWidth, maxHeight, fps)) {
+                ReplySuccess(reqId, L"{\"ok\":true}");
+            } else {
+                ReplyError(reqId, L"Não foi possível iniciar captura DXGI neste monitor.");
+            }
+            return;
+        }
+
+        if (cmd == L"updateDxgiCapture") {
+            if (m_dxgiService) {
+                int maxWidth = json_mini::ExtractInt(json, L"maxWidth", 1920);
+                int maxHeight = json_mini::ExtractInt(json, L"maxHeight", 1080);
+                int fps = json_mini::ExtractInt(json, L"fps", 60);
+                m_dxgiService->UpdateSettings(maxWidth, maxHeight, fps);
+            }
+            ReplySuccess(reqId, L"{\"ok\":true}");
+            return;
+        }
+
+        if (cmd == L"stopDxgiCapture") {
+            if (m_dxgiService) m_dxgiService->Stop();
             ReplySuccess(reqId, L"{\"ok\":true}");
             return;
         }
@@ -755,10 +815,15 @@ private:
                 return 0;
 
             case WM_DESTROY:
+                if (m_dxgiService) {
+                    m_dxgiService->Stop();
+                    m_dxgiService.reset();
+                }
                 if (m_audioService) {
                     m_audioService->Stop();
                     m_audioService.reset();
                 }
+                m_videoSharedBuffer.Reset();
                 m_sharedBuffer.Reset();
                 m_webview.Reset();
                 m_controller.Reset();
@@ -780,7 +845,9 @@ private:
     ComPtr<ICoreWebView2Controller> m_controller;
     ComPtr<ICoreWebView2> m_webview;
     ComPtr<ICoreWebView2SharedBuffer> m_sharedBuffer;
+    ComPtr<ICoreWebView2SharedBuffer> m_videoSharedBuffer;
     std::unique_ptr<AudioLoopbackService> m_audioService;
+    std::unique_ptr<DxgiCaptureService> m_dxgiService;
 };
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow) {
