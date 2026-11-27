@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>MacacoLive — Tela e som para assistir junto</title>
+    <meta
+      name="description"
+      content="Aplicativo leve para Windows que transmite tela e som estéreo direto entre amigos, sem eco da call do Discord."
+    />
+    <link rel="icon" type="image/png" href="./logo.png" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="nav">
+      <div class="wrap nav-inner">
+        <a class="brand" href="#topo" aria-label="MacacoLive">
+          <img src="./logo.png" width="30" height="30" alt="" />
+          <span>MacacoLive</span>
+        </a>
+        <nav class="nav-links">
+          <a href="#como-funciona">Como funciona</a>
+          <a href="#recursos">Recursos</a>
+          <a
+            href="https://github.com/MarcosVino/MacacoLive/releases"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Versões</a
+          >
+        </nav>
+      </div>
+    </header>
+
+    <main id="topo">
+      <section class="hero">
+        <div class="wrap hero-grid">
+          <div class="hero-copy">
+            <div class="release-line num">
+              <span class="dot" aria-hidden="true"></span>
+              <span id="release-meta">Windows 10 e 11 · v1.7.1 · ~1.2 MB</span>
+            </div>
+
+            <h1>Compartilhe a tela com som limpo para a turma assistir junto.</h1>
+
+            <p class="lead">
+              Um executável único para Windows. Baixe, abra e entre na mesma
+              sala com os amigos sem instalar nada, sem conta e sem o áudio da
+              call do Discord voltar na transmissão.
+            </p>
+
+            <div class="cta-row">
+              <a
+                id="dl-btn"
+                class="btn btn-primary"
+                href="https://github.com/MarcosVino/MacacoLive/releases/latest/download/MacacoLive.exe"
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                <span id="dl-label">Baixar MacacoLive.exe</span>
+              </a>
+
+              <a
+                class="btn btn-secondary"
+                href="https://github.com/MarcosVino/MacacoLive"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Código no GitHub
+              </a>
+            </div>
+
+            <p class="smartscreen-note">
+              <strong>Primeira abertura no Windows:</strong> se aparecer a tela
+              azul do SmartScreen (<em>"O Windows protegeu o computador"</em>),
+              clique em <strong>Mais informações</strong> e depois em
+              <strong>Executar assim mesmo</strong>. Isso só acontece porque o
+              app é independente e não usa certificado pago.
+            </p>
+          </div>
+
+          <div class="preview" aria-label="Prévia da interface do MacacoLive">
+            <div class="preview-top">
+              <div class="preview-brand">
+                <img src="./logo.png" width="22" height="22" alt="" />
+                <span class="preview-sep"></span>
+                <span class="dot"></span>
+                <strong>copa-394</strong>
+              </div>
+              <div class="preview-metrics num">
+                <span><strong>1080p</strong></span>
+                <span><strong>60</strong> fps</span>
+                <span><strong>12.0</strong> Mbps</span>
+              </div>
+              <span class="preview-pill">Ao vivo</span>
+            </div>
+
+            <div class="preview-body">
+              <div class="preview-stage">
+                <div class="stage-card">
+                  <div class="stage-bars" aria-hidden="true">
+                    <span></span><span></span><span></span><span></span>
+                  </div>
+                  <p class="stage-title">Você está transmitindo</p>
+                  <p class="stage-sub">
+                    Som do PC capturado sem o Discord. A prévia fica desligada
+                    para poupar sua placa de vídeo.
+                  </p>
+                </div>
+              </div>
+
+              <aside class="preview-side">
+                <div class="side-block">
+                  <div class="side-head">
+                    <span>Na sala</span>
+                    <span class="num">4 pessoas</span>
+                  </div>
+                  <div class="person">
+                    <span class="avatar self">MV</span>
+                    <div>
+                      <strong>Marco</strong>
+                      <small class="live">Transmitindo</small>
+                    </div>
+                  </div>
+                  <div class="person">
+                    <span class="avatar">LG</span>
+                    <div>
+                      <strong>Lucas</strong>
+                      <small>Assistindo</small>
+                    </div>
+                  </div>
+                  <div class="person">
+                    <span class="avatar">RT</span>
+                    <div>
+                      <strong>Rafael</strong>
+                      <small>Assistindo</small>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="side-block">
+                  <div class="side-head">
+                    <span>Perfil rápido</span>
+                  </div>
+                  <div class="seg">
+                    <span class="active">Cinema</span>
+                    <span>Jogo leve</span>
+                    <span>PC fraco</span>
+                  </div>
+                  <div class="audio-shield">
+                    Discord isolado da transmissão.
+                  </div>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="como-funciona" class="section">
+        <div class="wrap">
+          <h2>Em menos de um minuto</h2>
+          <ol class="steps">
+            <li>
+              <span class="step-num num">01</span>
+              <h3>Baixe e abra</h3>
+              <p>
+                É um arquivo único de menos de 1 MB. Não instala nada no sistema
+                e não precisa criar conta nem colocar e-mail.
+              </p>
+            </li>
+            <li>
+              <span class="step-num num">02</span>
+              <h3>Combine o nome da sala</h3>
+              <p>
+                Digite seu apelido e o mesmo código de sala que seus amigos
+                (pode colocar senha opcional).
+              </p>
+            </li>
+            <li>
+              <span class="step-num num">03</span>
+              <h3>Compartilhe tela e som</h3>
+              <p>
+                Quem for transmitir clica em Transmitir tela. Para todos os
+                outros, o vídeo abre sozinho com volume até 200%.
+              </p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section id="recursos" class="section section-alt">
+        <div class="wrap">
+          <h2>Feito para ficar horas aberto</h2>
+          <div class="features">
+            <article class="feat">
+              <h3>Áudio do Discord isolado</h3>
+              <p>
+                Usa captura nativa por processo do Windows para enviar o som do
+                filme ou jogo sem devolver a voz dos amigos na call.
+              </p>
+            </article>
+            <article class="feat">
+              <h3>Perfis para filme e jogo</h3>
+              <p>
+                Alterne em um clique entre Cinema (1080p 60 fps), Jogo leve
+                (720p 60 fps) ou PC fraco (720p 30 fps) mesmo ao vivo.
+              </p>
+            </article>
+            <article class="feat">
+              <h3>Direto entre os PCs</h3>
+              <p>
+                Conexão ponto a ponto criptografada sem limite de bitrate ou
+                travas artificiais de qualidade.
+              </p>
+            </article>
+            <article class="feat">
+              <h3>Atualiza sozinho dentro do app</h3>
+              <p>
+                Quando sai versão nova, o botão de atualizar aparece lá em cima
+                no aplicativo. Clicou, ele baixa, reinicia e já abre atualizado.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <span>MacacoLive · Windows 10 e 11 (x64)</span>
+        <a
+          href="https://github.com/MarcosVino/MacacoLive/releases/latest"
+          target="_blank"
+          rel="noopener noreferrer"
+          >Notas da versão</a
+        >
+      </div>
+    </footer>
+
+    <script>
+      (async () => {
+        try {
+          const res = await fetch('./version.json', { cache: 'no-store' });
+          if (res.ok) {
+            const v = await res.json();
+            if (v.version) {
+              const meta = document.getElementById('release-meta');
+              if (meta) meta.textContent = `Windows 10 e 11 · v${v.version} · ${v.size || '~1.2 MB'}`;
+              const btn = document.getElementById('dl-btn');
+              if (btn && v.url) btn.href = v.url;
+              const lbl = document.getElementById('dl-label');
+              if (lbl) lbl.textContent = `Baixar MacacoLive v${v.version}`;
+              return;
+            }
+          }
+        } catch {}
+        try {
+          const res = await fetch(
+            'https://api.github.com/repos/MarcosVino/MacacoLive/releases/latest',
+            { headers: { Accept: 'application/vnd.github+json' } }
+          );
+          if (!res.ok) return;
+          const data = await res.json();
+          const exe = Array.isArray(data.assets)
+            ? data.assets.find((a) => a.name === 'MacacoLive.exe')
+            : null;
+          if (!exe) return;
+
+          const ver = data.tag_name || 'v1.5.0';
+          const kb = Math.round(exe.size / 1024);
+          const sizeLabel =
+            kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB`;
+
+          const meta = document.getElementById('release-meta');
+          if (meta) {
+            meta.textContent = `Windows 10 e 11 · ${ver} · ${sizeLabel}`;
+          }
+          const btn = document.getElementById('dl-btn');
+          if (btn && exe.browser_download_url) {
+            btn.href = exe.browser_download_url;
+          }
+          const lbl = document.getElementById('dl-label');
+          if (lbl) {
+            lbl.textContent = `Baixar MacacoLive ${ver}`;
+          }
+        } catch {}
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>MacacoLive — Finalizar cadastro</title>
+    <meta
+      name="description"
+      content="Confirme seu e-mail e finalize sua conta no MacacoLive."
+    />
+    <link rel="icon" type="image/png" href="./logo.png" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="nav">
+      <div class="wrap nav-inner">
+        <a class="brand" href="./" aria-label="MacacoLive">
+          <img src="./logo.png" width="30" height="30" alt="" />
+          <span>MacacoLive</span>
+        </a>
+        <nav class="nav-links">
+          <a href="./">Página inicial</a>
+          <a
+            href="https://github.com/MarcosVino/MacacoLive/releases/latest"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Baixar app</a
+          >
+        </nav>
+      </div>
+    </header>
+
+    <main class="confirm-shell">
+      <section class="confirm-card" aria-live="polite">
+        <div id="state-loading">
+          <div class="confirm-badge warn">
+            <span class="spinner-ring" aria-hidden="true"></span>
+            <span>Verificando link</span>
+          </div>
+          <h1>Validando seu cadastro...</h1>
+          <p class="confirm-copy">
+            Aguarde só um instante enquanto checamos seu link de confirmação.
+          </p>
+        </div>
+
+        <div id="state-token-ready" class="hidden">
+          <div class="confirm-badge warn">
+            <span class="dot" style="background: var(--banana)" aria-hidden="true"></span>
+            <span>Falta 1 clique</span>
+          </div>
+          <h1>Confirmar e finalizar cadastro</h1>
+          <p class="confirm-copy">
+            Clique no botão abaixo para ativar seu e-mail com segurança e liberar
+            sua conta no MacacoLive.
+          </p>
+          <div class="confirm-actions">
+            <button id="btn-verify-token" type="button" class="btn btn-primary">
+              Finalizar cadastro agora
+            </button>
+            <div id="token-verify-error" class="confirm-feedback err hidden"></div>
+          </div>
+        </div>
+
+        <div id="state-success" class="hidden">
+          <div class="confirm-badge ok">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            <span>E-mail confirmado</span>
+          </div>
+          <h1 id="success-title">Conta ativada com sucesso!</h1>
+          <p class="confirm-copy" id="success-copy">
+            Tudo certo com o seu cadastro. Sua conta e suas salas salvas já estão
+            prontas para usar.
+          </p>
+
+          <div id="success-user-box" class="confirm-user-box hidden">
+            <span class="confirm-user-label">Conta conectada</span>
+            <span id="success-user-text" class="confirm-user-value"></span>
+          </div>
+
+          <div class="confirm-steps">
+            <div>
+              <strong>1.</strong> Abra o aplicativo <strong>MacacoLive.exe</strong> no Windows.
+            </div>
+            <div>
+              <strong>2.</strong> Faça login com o seu e-mail e a senha que você cadastrou.
+            </div>
+          </div>
+
+          <div class="confirm-actions">
+            <a href="./" class="btn btn-primary">Voltar para o site / Baixar app</a>
+          </div>
+        </div>
+
+        <div id="state-recovery" class="hidden">
+          <div class="confirm-badge warn">
+            <span>Redefinir senha</span>
+          </div>
+          <h1>Escolha uma nova senha</h1>
+          <p class="confirm-copy">
+            Digite abaixo a nova senha da sua conta MacacoLive.
+          </p>
+          <form id="recovery-form" class="confirm-form">
+            <div class="confirm-field">
+              <label for="recovery-password">Nova senha (mínimo 6 caracteres)</label>
+              <input
+                id="recovery-password"
+                class="confirm-input"
+                type="password"
+                minlength="6"
+                required
+                placeholder="••••••••"
+              />
+            </div>
+            <button id="btn-save-password" type="submit" class="btn btn-primary">
+              Salvar nova senha
+            </button>
+            <div id="recovery-feedback" class="confirm-feedback hidden"></div>
+          </form>
+        </div>
+
+        <div id="state-manual" class="hidden">
+          <div id="manual-badge" class="confirm-badge">
+            <span>Confirmação de conta</span>
+          </div>
+          <h1 id="manual-title">Finalize seu registro no MacacoLive</h1>
+          <p id="manual-copy" class="confirm-copy">
+            Se o link expirou ou você recebeu um código de 6 dígitos no e-mail,
+            confirme pelo código ou peça um novo link abaixo.
+          </p>
+
+          <form id="otp-form" class="confirm-form">
+            <div class="confirm-field">
+              <label for="manual-email">Seu e-mail</label>
+              <input
+                id="manual-email"
+                class="confirm-input"
+                type="email"
+                required
+                placeholder="voce@exemplo.com"
+              />
+            </div>
+            <div class="confirm-field">
+              <label for="manual-code">Código de 6 dígitos (opcional, se veio no e-mail)</label>
+              <input
+                id="manual-code"
+                class="confirm-input"
+                type="text"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                maxlength="12"
+                placeholder="123456"
+              />
+            </div>
+            <div class="confirm-actions">
+              <button id="btn-confirm-code" type="submit" class="btn btn-primary">
+                Confirmar com código
+              </button>
+              <button id="btn-resend-email" type="button" class="btn btn-secondary">
+                Reenviar e-mail de confirmação
+              </button>
+            </div>
+            <div id="manual-feedback" class="confirm-feedback hidden"></div>
+          </form>
+
+          <div class="confirm-divider">
+            Dica: alguns antivírus de e-mail abrem links automaticamente ao analisar a
+            mensagem. Se der link expirado, tente entrar direto no aplicativo antes de
+            pedir um novo link.
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <span>MacacoLive · Windows 10 e 11 (x64)</span>
+        <a href="./">Voltar para a página principal</a>
+      </div>
+    </footer>
+
+    <script>
+      (() => {
+        const SUPABASE_URL = 'https://vnraonmtmvxqkcaefkyz.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_LEHXzAr5fHvpmND9G7uJ6w_MPnibo0_';
+        const REDIRECT_TO = `${window.location.origin}${window.location.pathname}`;
+
+        const views = {
+          loading: document.getElementById('state-loading'),
+          tokenReady: document.getElementById('state-token-ready'),
+          success: document.getElementById('state-success'),
+          recovery: document.getElementById('state-recovery'),
+          manual: document.getElementById('state-manual'),
+        };
+
+        function showView(name) {
+          Object.entries(views).forEach(([key, el]) => {
+            if (!el) return;
+            el.classList.toggle('hidden', key !== name);
+          });
+        }
+
+        function showFeedback(el, message, kind) {
+          if (!el) return;
+          el.textContent = message;
+          el.classList.remove('hidden', 'ok', 'err');
+          if (kind) el.classList.add(kind);
+        }
+
+        function showSuccessUser(user) {
+          const box = document.getElementById('success-user-box');
+          const txt = document.getElementById('success-user-text');
+          const title = document.getElementById('success-title');
+          const nick =
+            user &&
+            user.user_metadata &&
+            typeof user.user_metadata.nickname === 'string'
+              ? user.user_metadata.nickname.trim()
+              : '';
+          if (title && nick) {
+            title.textContent = `Bem-vindo, ${nick}!`;
+          }
+          if (box && txt && (nick || (user && user.email))) {
+            txt.textContent = nick && user.email ? `${nick} · ${user.email}` : user.email || nick;
+            box.classList.remove('hidden');
+          }
+        }
+
+        async function supabaseRequest(path, options = {}) {
+          const headers = {
+            apikey: SUPABASE_KEY,
+            'Content-Type': 'application/json',
+            ...(options.headers || {}),
+          };
+          const res = await fetch(`${SUPABASE_URL}/auth/v1${path}`, {
+            method: options.method || 'GET',
+            headers,
+            body: options.body ? JSON.stringify(options.body) : undefined,
+          });
+          let payload = {};
+          try {
+            payload = await res.json();
+          } catch {}
+          if (!res.ok) {
+            const msg =
+              payload.msg ||
+              payload.error_description ||
+              payload.error ||
+              `Erro HTTP ${res.status}`;
+            throw new Error(msg);
+          }
+          return payload;
+        }
+
+        async function verifyTokenHash(tokenHash, rawType) {
+          const typesToTry =
+            rawType === 'email'
+              ? ['email', 'signup']
+              : rawType === 'signup'
+              ? ['signup', 'email']
+              : [rawType || 'email'];
+
+          let lastErr = null;
+          for (const t of typesToTry) {
+            try {
+              return await supabaseRequest('/verify', {
+                method: 'POST',
+                body: { token_hash: tokenHash, type: t },
+              });
+            } catch (err) {
+              lastErr = err;
+            }
+          }
+          throw lastErr || new Error('Não foi possível validar este link.');
+        }
+
+        async function verifyEmailOtpCode(email, token) {
+          const typesToTry = ['signup', 'email'];
+          let lastErr = null;
+          for (const t of typesToTry) {
+            try {
+              return await supabaseRequest('/verify', {
+                method: 'POST',
+                body: { email, token, type: t },
+              });
+            } catch (err) {
+              lastErr = err;
+            }
+          }
+          throw lastErr || new Error('Código inválido ou expirado.');
+        }
+
+        function mapFriendlyError(raw) {
+          const text = String(raw || '').toLowerCase();
+          if (text.includes('expired') || text.includes('otp_expired')) {
+            return 'Esse link expirou ou já foi usado antes. Tente fazer login no MacacoLive ou reenvie a confirmação abaixo.';
+          }
+          if (text.includes('invalid') || text.includes('token')) {
+            return 'Link ou código inválido. Peça um novo e-mail de confirmação abaixo.';
+          }
+          return raw || 'Não foi possível concluir a verificação.';
+        }
+
+        const query = new URLSearchParams(window.location.search);
+        const hash = new URLSearchParams(
+          window.location.hash.startsWith('#')
+            ? window.location.hash.slice(1)
+            : window.location.hash
+        );
+
+        const accessToken = hash.get('access_token');
+        const hashType = hash.get('type') || query.get('type') || '';
+        const tokenHash = query.get('token_hash') || query.get('token');
+        const errMsg =
+          hash.get('error_description') ||
+          query.get('error_description') ||
+          hash.get('error') ||
+          query.get('error');
+        const errCode = hash.get('error_code') || query.get('error_code');
+
+        let recoveryToken = null;
+
+        async function init() {
+          if (errMsg || errCode) {
+            const badge = document.getElementById('manual-badge');
+            const title = document.getElementById('manual-title');
+            const copy = document.getElementById('manual-copy');
+            if (badge) {
+              badge.className = 'confirm-badge err';
+              badge.innerHTML = '<span>Link expirado ou inválido</span>';
+            }
+            if (title) title.textContent = 'Não foi possível confirmar pelo link';
+            if (copy) copy.textContent = mapFriendlyError(errMsg || errCode);
+            showView('manual');
+            window.history.replaceState({}, document.title, window.location.pathname);
+            return;
+          }
+
+          if (accessToken) {
+            if (hashType === 'recovery') {
+              recoveryToken = accessToken;
+              showView('recovery');
+              window.history.replaceState({}, document.title, window.location.pathname);
+              return;
+            }
+
+            try {
+              const user = await supabaseRequest('/user', {
+                headers: { Authorization: `Bearer ${accessToken}` },
+              });
+              showSuccessUser(user);
+            } catch {}
+
+            showView('success');
+            window.history.replaceState({}, document.title, window.location.pathname);
+            return;
+          }
+
+          if (tokenHash) {
+            showView('tokenReady');
+            return;
+          }
+
+          showView('manual');
+        }
+
+        const btnVerifyToken = document.getElementById('btn-verify-token');
+        if (btnVerifyToken) {
+          btnVerifyToken.addEventListener('click', async () => {
+            const errBox = document.getElementById('token-verify-error');
+            btnVerifyToken.disabled = true;
+            btnVerifyToken.textContent = 'Confirmando...';
+            if (errBox) errBox.classList.add('hidden');
+
+            try {
+              const data = await verifyTokenHash(tokenHash, hashType || 'email');
+              if (hashType === 'recovery' && data && data.access_token) {
+                recoveryToken = data.access_token;
+                showView('recovery');
+              } else {
+                showSuccessUser(data && data.user ? data.user : null);
+                showView('success');
+              }
+              window.history.replaceState({}, document.title, window.location.pathname);
+            } catch (err) {
+              const friendly = mapFriendlyError(err && err.message);
+              showFeedback(errBox, friendly, 'err');
+              btnVerifyToken.disabled = false;
+              btnVerifyToken.textContent = 'Tentar novamente';
+            }
+          });
+        }
+
+        const recoveryForm = document.getElementById('recovery-form');
+        if (recoveryForm) {
+          recoveryForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const pwInput = document.getElementById('recovery-password');
+            const btnSave = document.getElementById('btn-save-password');
+            const feedback = document.getElementById('recovery-feedback');
+            const password = pwInput ? pwInput.value : '';
+            if (!recoveryToken || password.length < 6) return;
+
+            btnSave.disabled = true;
+            btnSave.textContent = 'Salvando...';
+            try {
+              const user = await supabaseRequest('/user', {
+                method: 'PUT',
+                headers: { Authorization: `Bearer ${recoveryToken}` },
+                body: { password },
+              });
+              const title = document.getElementById('success-title');
+              const copy = document.getElementById('success-copy');
+              if (title) title.textContent = 'Senha atualizada!';
+              if (copy) {
+                copy.textContent =
+                  'Sua nova senha já está valendo. Agora é só abrir o MacacoLive e entrar.';
+              }
+              showSuccessUser(user);
+              showView('success');
+            } catch (err) {
+              showFeedback(feedback, mapFriendlyError(err && err.message), 'err');
+              btnSave.disabled = false;
+              btnSave.textContent = 'Salvar nova senha';
+            }
+          });
+        }
+
+        const otpForm = document.getElementById('otp-form');
+        const btnResend = document.getElementById('btn-resend-email');
+        const manualEmail = document.getElementById('manual-email');
+        const manualCode = document.getElementById('manual-code');
+        const manualFeedback = document.getElementById('manual-feedback');
+
+        if (otpForm) {
+          otpForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = manualEmail ? manualEmail.value.trim() : '';
+            const code = manualCode ? manualCode.value.trim() : '';
+            if (!email || !code) {
+              showFeedback(
+                manualFeedback,
+                'Informe seu e-mail e o código de 6 dígitos recebido.',
+                'err'
+              );
+              return;
+            }
+            const btn = document.getElementById('btn-confirm-code');
+            btn.disabled = true;
+            btn.textContent = 'Verificando...';
+            try {
+              const data = await verifyEmailOtpCode(email, code);
+              showSuccessUser(data && data.user ? data.user : { email });
+              showView('success');
+            } catch (err) {
+              showFeedback(manualFeedback, mapFriendlyError(err && err.message), 'err');
+            } finally {
+              btn.disabled = false;
+              btn.textContent = 'Confirmar com código';
+            }
+          });
+        }
+
+        if (btnResend) {
+          btnResend.addEventListener('click', async () => {
+            const email = manualEmail ? manualEmail.value.trim() : '';
+            if (!email) {
+              showFeedback(manualFeedback, 'Digite o seu e-mail primeiro.', 'err');
+              return;
+            }
+            btnResend.disabled = true;
+            btnResend.textContent = 'Enviando...';
+            try {
+              await supabaseRequest(
+                `/resend?redirect_to=${encodeURIComponent(REDIRECT_TO)}`,
+                {
+                  method: 'POST',
+                  body: {
+                    type: 'signup',
+                    email,
+                  },
+                }
+              );
+              showFeedback(
+                manualFeedback,
+                'Novo e-mail enviado! Confira sua caixa de entrada e o spam.',
+                'ok'
+              );
+            } catch (err) {
+              showFeedback(
+                manualFeedback,
+                mapFriendlyError(err && err.message),
+                'err'
+              );
+            } finally {
+              btnResend.disabled = false;
+              btnResend.textContent = 'Reenviar e-mail de confirmação';
+            }
+          });
+        }
+
+        init();
+      })();
+    </script>
+  </body>
+</html>
