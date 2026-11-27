@@ -11,6 +11,19 @@ export interface MonitorInfo {
   width: number;
   height: number;
   primary: boolean;
+  thumbDataUrl?: string;
+}
+
+export interface WindowPreviewInfo {
+  pid: number;
+  name: string;
+  title: string;
+  iconDataUrl?: string;
+}
+
+export interface CapturePreviews {
+  monitors: MonitorInfo[];
+  windows: WindowPreviewInfo[];
 }
 
 export type CaptureSource = 'dxgi-monitor' | 'window-picker';

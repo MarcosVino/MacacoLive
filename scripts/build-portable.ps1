@@ -33,7 +33,7 @@ if errorlevel 1 exit /b 1
 cl.exe /nologo /std:c++20 /O1 /Os /MT /EHsc /utf-8 /DNDEBUG ^
   /I"$wvInc" ^
   main.cpp app.res "$wvLib" ^
-  user32.lib gdi32.lib shell32.lib shlwapi.lib ole32.lib oleaut32.lib advapi32.lib dwmapi.lib mmdevapi.lib avrt.lib d3d11.lib dxgi.lib version.lib winhttp.lib ^
+  user32.lib gdi32.lib gdiplus.lib shell32.lib shlwapi.lib ole32.lib oleaut32.lib advapi32.lib dwmapi.lib mmdevapi.lib avrt.lib d3d11.lib dxgi.lib version.lib winhttp.lib ^
   /link /SUBSYSTEM:WINDOWS /OPT:REF /OPT:ICF /OUT:"$outExe"
 if errorlevel 1 exit /b 1
 del /q main.obj app.res 2>nul

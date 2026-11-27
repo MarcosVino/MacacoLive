@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import type { User } from '@supabase/supabase-js';
 import {
   Check,
   Copy,
@@ -6,25 +7,40 @@ import {
   Eye,
   EyeOff,
   LoaderCircle,
+  Lock,
   LogOut,
   Maximize2,
   Minimize2,
   MonitorUp,
   PanelRightClose,
   PanelRightOpen,
+  Pin,
+  PinOff,
   Radio,
   RefreshCw,
   ShieldCheck,
   Shuffle,
   Square,
+  Trash2,
   TriangleAlert,
   Tv,
+  UserCheck,
   Volume2,
   VolumeX,
   WifiOff,
 } from 'lucide-react';
+import { ShareModal } from './components/ShareModal';
 import { LogoMark } from './Logo';
 import { nativeBridge } from './nativeBridge';
+import {
+  fetchUserProfileAndRooms,
+  removeSavedRoom,
+  SavedRoomRecord,
+  supabase,
+  toggleRoomPin,
+  updateNickname,
+  upsertSavedRoom,
+} from './supabaseClient';
 import {
   AudioCaptureMode,
   AudioProcessInfo,
@@ -58,6 +74,7 @@ const DEFAULT_QUALITY: StreamQualityConfig = {
 
 const REACTIONS = ['🍌', '😂', '🔥', '👏', '😮'];
 const WATCH_TIMEOUT_MS = 15000;
+const LOCAL_ROOMS_KEY = 'ml_saved_rooms_v1';
 
 const plural = new Intl.PluralRules('pt-BR');
 function countLabel(n: number, one: string, other: string) {
@@ -77,7 +94,47 @@ function randomRoomName(): string {
   return `${w}-${Math.floor(100 + Math.random() * 900)}`;
 }
 
+function loadLocalRooms(): SavedRoomRecord[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_ROOMS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalRooms(rooms: SavedRoomRecord[]) {
+  try {
+    localStorage.setItem(LOCAL_ROOMS_KEY, JSON.stringify(rooms.slice(0, 24)));
+  } catch {}
+}
+
+function relativeTimeLabel(iso: string): string {
+  const diffMin = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (diffMin < 2) return 'agora';
+  if (diffMin < 60) return `há ${diffMin} min`;
+  const diffH = Math.round(diffMin / 60);
+  if (diffH < 24) return `há ${diffH} h`;
+  const diffD = Math.round(diffH / 24);
+  if (diffD < 7) return `há ${diffD} d`;
+  return new Date(iso).toLocaleDateString('pt-BR');
+}
+
 export function App() {
+  // Supabase Auth & Saved Rooms ("Discord de Telas")
+  const [user, setUser] = useState<User | null>(null);
+  const [authTab, setAuthTab] = useState<'login' | 'signup'>('login');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [authSuccess, setAuthSuccess] = useState('');
+  const [guestMode, setGuestMode] = useState(() => localStorage.getItem('ml_guest') === '1');
+  const [savedRooms, setSavedRooms] = useState<SavedRoomRecord[]>(() => loadLocalRooms());
+
+  // Room & Joining
   const [inRoom, setInRoom] = useState(false);
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState('');
@@ -98,6 +155,7 @@ export function App() {
   const [audioStatus, setAudioStatus] = useState('');
   const [vuLevel, setVuLevel] = useState(0);
 
+  const [shareModalOpen, setShareModalOpen] = useState(false);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [showLocalPreview, setShowLocalPreview] = useState(false);
   const [shareError, setShareError] = useState('');
@@ -128,6 +186,39 @@ export function App() {
   const gainNodeRef = useRef<GainNode | null>(null);
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
 
+  const syncAccountData = async (currentUser: User | null) => {
+    if (!currentUser) {
+      setSavedRooms(loadLocalRooms());
+      return;
+    }
+    try {
+      const { nickname: cloudNick, rooms } = await fetchUserProfileAndRooms(currentUser.id);
+      if (cloudNick) {
+        setNickname(cloudNick);
+        localStorage.setItem('ml_nick', cloudNick);
+      }
+      setSavedRooms(rooms);
+    } catch {}
+  };
+
+  useEffect(() => {
+    void supabase.auth.getSession().then(({ data }) => {
+      const u = data.session?.user ?? null;
+      setUser(u);
+      if (u) void syncAccountData(u);
+    });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      const u = session?.user ?? null;
+      setUser(u);
+      void syncAccountData(u);
+    });
+
+    return () => {
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+
   useEffect(() => {
     nativeBridge.init();
     nativeBridge.onAudioLevel((lvl) => setVuLevel(lvl));
@@ -137,26 +228,17 @@ export function App() {
       if (fs) setSidebarOpen(false);
     });
 
-    const runUpdateCheck = (manual = false) => {
-      if (manual) {
-        setCheckingUpdate(true);
-        setUpdateCheckedMsg('');
-      }
+    const runUpdateCheck = () => {
       void nativeBridge.checkUpdate().then((res) => {
-        if (manual) setCheckingUpdate(false);
         if (res && res.available && res.downloadUrl) {
           setUpdateInfo(res);
           setUpdateCheckedMsg('');
-        } else if (manual) {
-          setUpdateCheckedMsg(
-            res ? `Já está na última versão (v${res.currentVersion}).` : 'Não foi possível verificar agora.'
-          );
         }
       });
     };
 
-    runUpdateCheck(false);
-    const updateTimer = window.setInterval(() => runUpdateCheck(false), 5 * 60 * 1000);
+    runUpdateCheck();
+    const updateTimer = window.setInterval(runUpdateCheck, 5 * 60 * 1000);
 
     const stopCaptureOnExit = () => {
       void engineRef.current?.stopScreenShare(false);
@@ -221,7 +303,6 @@ export function App() {
     }
   }, [volumePct, muted, remoteStream]);
 
-  // Extra GainNode only for boost above 100% (105% - 200%)
   useEffect(() => {
     if (sourceNodeRef.current) {
       try {
@@ -241,7 +322,6 @@ export function App() {
       if (ctx.state === 'suspended') void ctx.resume();
       const source = ctx.createMediaStreamSource(remoteStream);
       const gain = gainNodeRef.current || ctx.createGain();
-      // Native <video> already outputs 100%; GainNode adds the extra (volumePct - 100)%
       gain.gain.value = (volumePct - 100) / 100;
       source.connect(gain);
       gain.connect(ctx.destination);
@@ -250,7 +330,6 @@ export function App() {
     } catch {}
   }, [remoteStream, volumePct, muted]);
 
-  // Connecting state with timeout -> error + retry
   useEffect(() => {
     setWatchFailed(false);
     if (!watchTarget || remoteStream) return;
@@ -267,7 +346,6 @@ export function App() {
   };
 
   useEffect(() => {
-    // In desktop app, native WebView2 AcceleratorKeyPressed handles F11 & Escape reliably without double-toggle
     if (nativeBridge.isDesktopApp) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'F11') {
@@ -287,13 +365,90 @@ export function App() {
     window.setTimeout(() => setReactions((prev) => prev.filter((r) => r.id !== id)), 3100);
   };
 
-  const handleJoinRoom = async (e: React.FormEvent) => {
+  const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const room = roomCode.trim();
+    const email = authEmail.trim();
+    if (!email || !authPassword) return;
+
+    setAuthLoading(true);
+    setAuthError('');
+    setAuthSuccess('');
+
+    try {
+      if (authTab === 'signup') {
+        const cleanNick = nickname.trim() || email.split('@')[0] || 'Macaco';
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password: authPassword,
+          options: { data: { nickname: cleanNick } },
+        });
+        if (error) throw error;
+        setNickname(cleanNick);
+        localStorage.setItem('ml_nick', cleanNick);
+
+        if (data.session) {
+          setGuestMode(false);
+          localStorage.removeItem('ml_guest');
+        } else {
+          setAuthSuccess('Conta criada. Confirme o link no seu e-mail e depois faça login.');
+          setAuthTab('login');
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password: authPassword,
+        });
+        if (error) throw error;
+        setGuestMode(false);
+        localStorage.removeItem('ml_guest');
+      }
+    } catch (err: any) {
+      setAuthError(err?.message || 'Não foi possível autenticar.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleSignOutAccount = async () => {
+    await supabase.auth.signOut();
+    setAuthEmail('');
+    setAuthPassword('');
+    setGuestMode(false);
+    localStorage.removeItem('ml_guest');
+  };
+
+  const recordRoomHistory = async (code: string, pass: string) => {
+    const now = new Date().toISOString();
+    const existing = savedRooms.find((r) => r.room_code === code);
+    const entry: SavedRoomRecord = {
+      room_code: code,
+      room_label: existing?.room_label || code,
+      room_password: pass,
+      is_pinned: existing?.is_pinned ?? false,
+      last_joined_at: now,
+    };
+
+    const next = [entry, ...savedRooms.filter((r) => r.room_code !== code)].sort((a, b) => {
+      if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
+      return new Date(b.last_joined_at).getTime() - new Date(a.last_joined_at).getTime();
+    });
+    setSavedRooms(next);
+    saveLocalRooms(next);
+
+    if (user) {
+      await upsertSavedRoom(user.id, entry);
+      await updateNickname(user.id, nickname);
+    }
+  };
+
+  const enterRoom = async (targetCode: string, targetPass: string) => {
+    const room = targetCode.trim();
     if (!room) return;
 
     const nick = nickname.trim() || `Macaco ${Math.floor(10 + Math.random() * 89)}`;
     setNickname(nick);
+    setRoomCode(room);
+    setRoomPassword(targetPass);
     localStorage.setItem('ml_nick', nick);
     localStorage.setItem('ml_room', room);
 
@@ -317,13 +472,39 @@ export function App() {
         quality
       );
       engineRef.current = engine;
-      await engine.joinRoom(nick, room, roomPassword);
+      await engine.joinRoom(nick, room, targetPass);
       setInRoom(true);
+      void recordRoomHistory(room, targetPass);
     } catch (err: any) {
       setJoinError(err?.message || 'Não foi possível entrar na sala.');
     } finally {
       setJoining(false);
     }
+  };
+
+  const handleJoinRoomForm = (e: React.FormEvent) => {
+    e.preventDefault();
+    void enterRoom(roomCode, roomPassword);
+  };
+
+  const handleTogglePin = async (room: SavedRoomRecord) => {
+    const nextPin = !room.is_pinned;
+    const next = savedRooms
+      .map((r) => (r.room_code === room.room_code ? { ...r, is_pinned: nextPin } : r))
+      .sort((a, b) => {
+        if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
+        return new Date(b.last_joined_at).getTime() - new Date(a.last_joined_at).getTime();
+      });
+    setSavedRooms(next);
+    saveLocalRooms(next);
+    if (user) await toggleRoomPin(user.id, room.room_code, nextPin);
+  };
+
+  const handleRemoveRoom = async (roomCodeToDelete: string) => {
+    const next = savedRooms.filter((r) => r.room_code !== roomCodeToDelete);
+    setSavedRooms(next);
+    saveLocalRooms(next);
+    if (user) await removeSavedRoom(user.id, roomCodeToDelete);
   };
 
   const handleManualUpdateCheck = async () => {
@@ -356,7 +537,6 @@ export function App() {
   };
 
   const handleLeaveRoom = async () => {
-    // Detach video/audio elements immediately so browser never holds a live MediaStreamTrack reference
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
@@ -378,6 +558,7 @@ export function App() {
     const engine = engineRef.current;
     engineRef.current = null;
 
+    setShareModalOpen(false);
     setLocalStream(null);
     setShowLocalPreview(false);
     setRemoteStream(null);
@@ -397,15 +578,17 @@ export function App() {
     }
   };
 
-  const handleStartShare = async () => {
+  const startShareWithConfig = async (cfg: StreamQualityConfig) => {
     if (!engineRef.current) return;
+    setQuality(cfg);
     setShareError('');
     try {
-      await engineRef.current.startScreenShare(quality);
+      await engineRef.current.startScreenShare(cfg);
     } catch (err: any) {
       if (err?.name !== 'NotAllowedError' && err?.name !== 'AbortError') {
         setShareError(err?.message || 'Não foi possível capturar a tela.');
       }
+      throw err;
     }
   };
 
@@ -450,92 +633,355 @@ export function App() {
     await engineRef.current?.sendReaction(emoji);
   };
 
-  /* ---------------- Lobby ---------------- */
+  /* ---------------- Lobby / Account Hub ---------------- */
   if (!inRoom) {
+    const showAuthPanel = !user && !guestMode;
+
     return (
-      <main className="lobby">
-        <form className="lobby-form" onSubmit={handleJoinRoom}>
-          <header className="lobby-head">
-            <LogoMark size={48} title="MacacoLive" />
-            <h1>MacacoLive</h1>
-            <p>Transmita sua tela com som para a turma assistir junto.</p>
-          </header>
-
-          <div className="lobby-fields">
-            <label className="field">
-              <span className="field-label">Apelido</span>
-              <input
-                className="input"
-                placeholder="Como a turma te chama"
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
-                maxLength={60}
-                autoFocus
-              />
-            </label>
-
-            <div className="field">
-              <label className="field-label" htmlFor="room">
-                Sala
-                <span className="field-hint">Todos entram com o mesmo nome</span>
-              </label>
-              <div className="input-row">
-                <input
-                  id="room"
-                  className="input"
-                  value={roomCode}
-                  onChange={(e) => setRoomCode(e.target.value)}
-                  maxLength={48}
-                  required
-                />
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-icon"
-                  style={{ width: 40, height: 40 }}
-                  title="Sortear outro nome"
-                  aria-label="Sortear outro nome de sala"
-                  onClick={() => setRoomCode(randomRoomName())}
-                >
-                  <Shuffle size={16} />
-                </button>
-              </div>
-            </div>
-
-            <label className="field">
-              <span className="field-label">
-                Senha
-                <span className="field-hint">Opcional</span>
-              </span>
-              <input
-                type="password"
-                className="input"
-                placeholder="Sem senha, entra quem souber o nome da sala"
-                value={roomPassword}
-                onChange={(e) => setRoomPassword(e.target.value)}
-              />
-            </label>
+      <div className="lobby view-enter">
+        <header className="lobby-topbar">
+          <div className="wordmark">
+            <LogoMark size={30} title="MacacoLive" />
+            <span className="wordmark-text">MacacoLive</span>
           </div>
 
-          {joinError && (
-            <div className="inline-error" role="alert">
-              <TriangleAlert size={16} style={{ flexShrink: 0, marginTop: 1 }} />
-              <span>{joinError}</span>
-            </div>
-          )}
-
-          <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={joining}>
-            {joining ? (
-              <>
-                <LoaderCircle size={16} className="spin" /> Conectando
-              </>
-            ) : (
-              'Entrar na sala'
+          <div className="lobby-topbar-right">
+            {updateInfo?.available && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={updating}
+                onClick={() => void handleInstallUpdate()}
+              >
+                {updating ? (
+                  <>
+                    <LoaderCircle size={14} className="spin" /> Atualizando...
+                  </>
+                ) : (
+                  <>
+                    <Download size={14} /> Atualizar v{updateInfo.latestVersion}
+                  </>
+                )}
+              </button>
             )}
-          </button>
 
-          <div className="lobby-foot" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            {user ? (
+              <div className="account-pill">
+                <span className="avatar self" style={{ width: 26, height: 26, fontSize: 11 }}>
+                  {initials(nickname || user.email || 'M')}
+                </span>
+                <span className="truncate" style={{ maxWidth: 160 }}>
+                  {nickname || user.email}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-icon"
+                  style={{ width: 26, height: 26 }}
+                  onClick={() => void handleSignOutAccount()}
+                  title="Sair da conta"
+                  aria-label="Sair da conta"
+                >
+                  <LogOut size={14} />
+                </button>
+              </div>
+            ) : guestMode ? (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  setGuestMode(false);
+                  localStorage.removeItem('ml_guest');
+                }}
+              >
+                <UserCheck size={14} /> Entrar com conta
+              </button>
+            ) : null}
+          </div>
+        </header>
+
+        <main className="lobby-content">
+          <div className="lobby-grid">
+            {/* Left card: Login OR Join Room */}
+            {showAuthPanel ? (
+              <form className="lobby-card view-enter" onSubmit={handleAuthSubmit}>
+                <header className="lobby-head">
+                  <h1>Sua conta na tropa</h1>
+                  <p>Entre ou crie sua conta para salvar as salas que você frequenta.</p>
+                </header>
+
+                <div className="segmented" role="tablist">
+                  <button
+                    type="button"
+                    className="seg"
+                    aria-pressed={authTab === 'login'}
+                    onClick={() => {
+                      setAuthTab('login');
+                      setAuthError('');
+                    }}
+                  >
+                    Entrar
+                  </button>
+                  <button
+                    type="button"
+                    className="seg"
+                    aria-pressed={authTab === 'signup'}
+                    onClick={() => {
+                      setAuthTab('signup');
+                      setAuthError('');
+                    }}
+                  >
+                    Criar conta
+                  </button>
+                </div>
+
+                <div className="lobby-fields">
+                  {authTab === 'signup' && (
+                    <label className="field">
+                      <span className="field-label">Apelido</span>
+                      <input
+                        className="input"
+                        placeholder="Como a turma te chama"
+                        value={nickname}
+                        onChange={(e) => setNickname(e.target.value)}
+                        maxLength={40}
+                        required
+                      />
+                    </label>
+                  )}
+
+                  <label className="field">
+                    <span className="field-label">E-mail</span>
+                    <input
+                      type="email"
+                      className="input"
+                      placeholder="voce@exemplo.com"
+                      value={authEmail}
+                      onChange={(e) => setAuthEmail(e.target.value)}
+                      required
+                      autoFocus
+                    />
+                  </label>
+
+                  <label className="field">
+                    <span className="field-label">Senha</span>
+                    <input
+                      type="password"
+                      className="input"
+                      placeholder="Mínimo 6 caracteres"
+                      value={authPassword}
+                      onChange={(e) => setAuthPassword(e.target.value)}
+                      minLength={6}
+                      required
+                    />
+                  </label>
+                </div>
+
+                {authError && (
+                  <div className="inline-error" role="alert">
+                    <TriangleAlert size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+                    <span>{authError}</span>
+                  </div>
+                )}
+
+                {authSuccess && (
+                  <div className="inline-ok" role="status">
+                    <Check size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+                    <span>{authSuccess}</span>
+                  </div>
+                )}
+
+                <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={authLoading}>
+                  {authLoading ? (
+                    <>
+                      <LoaderCircle size={16} className="spin" /> Aguarde
+                    </>
+                  ) : authTab === 'signup' ? (
+                    'Criar conta'
+                  ) : (
+                    'Entrar'
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-block"
+                  onClick={() => {
+                    setGuestMode(true);
+                    localStorage.setItem('ml_guest', '1');
+                  }}
+                >
+                  Continuar sem conta
+                </button>
+              </form>
+            ) : (
+              <form className="lobby-card view-enter" onSubmit={handleJoinRoomForm}>
+                <header className="lobby-head">
+                  <h1>Entrar em uma sala</h1>
+                  <p>Crie ou entre numa sala para transmitir tela e som direto aos amigos.</p>
+                </header>
+
+                <div className="lobby-fields">
+                  <label className="field">
+                    <span className="field-label">Apelido</span>
+                    <input
+                      className="input"
+                      placeholder="Como a turma te chama"
+                      value={nickname}
+                      onChange={(e) => setNickname(e.target.value)}
+                      maxLength={60}
+                      autoFocus
+                    />
+                  </label>
+
+                  <div className="field">
+                    <label className="field-label" htmlFor="room">
+                      Sala
+                      <span className="field-hint">Todos entram com o mesmo nome</span>
+                    </label>
+                    <div className="input-row">
+                      <input
+                        id="room"
+                        className="input"
+                        value={roomCode}
+                        onChange={(e) => setRoomCode(e.target.value)}
+                        maxLength={48}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-icon"
+                        style={{ width: 40, height: 40 }}
+                        title="Sortear outro nome"
+                        aria-label="Sortear outro nome de sala"
+                        onClick={() => setRoomCode(randomRoomName())}
+                      >
+                        <Shuffle size={16} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <label className="field">
+                    <span className="field-label">
+                      Senha
+                      <span className="field-hint">Opcional</span>
+                    </span>
+                    <input
+                      type="password"
+                      className="input"
+                      placeholder="Sem senha, entra quem souber o nome"
+                      value={roomPassword}
+                      onChange={(e) => setRoomPassword(e.target.value)}
+                    />
+                  </label>
+                </div>
+
+                {joinError && (
+                  <div className="inline-error" role="alert">
+                    <TriangleAlert size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+                    <span>{joinError}</span>
+                  </div>
+                )}
+
+                <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={joining}>
+                  {joining ? (
+                    <>
+                      <LoaderCircle size={16} className="spin" /> Conectando
+                    </>
+                  ) : (
+                    'Entrar na sala'
+                  )}
+                </button>
+              </form>
+            )}
+
+            {/* Right card: Saved / Recent Rooms (Discord-like server/channel list) */}
+            <section className="lobby-card">
+              <header className="lobby-head">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <h2>Suas salas</h2>
+                  <span className="field-hint num">
+                    {user ? 'Sincronizado na conta' : 'Salvo neste PC'}
+                  </span>
+                </div>
+                <p>
+                  {user
+                    ? 'Clique para voltar em 1 segundo para as salas que você entrou por último.'
+                    : 'Entre na sua conta para sincronizar essas salas em qualquer PC.'}
+                </p>
+              </header>
+
+              {savedRooms.length === 0 ? (
+                <div className="empty-note">
+                  Nenhuma sala salva ainda. Assim que você entrar em uma sala, ela fica aqui no seu histórico.
+                </div>
+              ) : (
+                <div className="saved-rooms-list">
+                  {savedRooms.map((r, idx) => (
+                    <div
+                      key={r.room_code}
+                      className="room-item item-enter"
+                      style={{ animationDelay: `${Math.min(idx * 35, 180)}ms` }}
+                    >
+                      <button
+                        type="button"
+                        className="room-item-main"
+                        disabled={joining}
+                        onClick={() => void enterRoom(r.room_code, r.room_password || '')}
+                      >
+                        <span className="room-item-title">
+                          <span className="truncate">{r.room_label || r.room_code}</span>
+                          {r.room_password && <Lock size={12} color="var(--text-3)" />}
+                        </span>
+                        <span className="room-item-sub num">
+                          {r.is_pinned ? 'Fixada · ' : ''}
+                          {relativeTimeLabel(r.last_joined_at)}
+                        </span>
+                      </button>
+
+                      <div className="room-item-actions">
+                        <button
+                          type="button"
+                          className="btn btn-icon"
+                          style={{ width: 30, height: 30 }}
+                          onClick={() => void handleTogglePin(r)}
+                          title={r.is_pinned ? 'Desafixar' : 'Fixar no topo'}
+                          aria-label={r.is_pinned ? 'Desafixar sala' : 'Fixar sala'}
+                        >
+                          {r.is_pinned ? (
+                            <PinOff size={14} color="var(--banana)" />
+                          ) : (
+                            <Pin size={14} />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-icon"
+                          style={{ width: 30, height: 30 }}
+                          onClick={() => void handleRemoveRoom(r.room_code)}
+                          title="Remover do histórico"
+                          aria-label="Remover sala do histórico"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {showAuthPanel && (
+                <div className="lobby-fields" style={{ paddingTop: 8, borderTop: '1px solid var(--line)' }}>
+                  <span className="field-hint">
+                    Quer só entrar rápido? Clique em <strong>Continuar sem conta</strong> ao lado ou escolha uma sala salva acima.
+                  </span>
+                </div>
+              )}
+            </section>
+          </div>
+
+          <div className="lobby-foot">
             <span>
-              Vídeo direto P2P · v1.5.1
+              Vídeo direto P2P · v1.6.0
               {updateCheckedMsg ? ` · ${updateCheckedMsg}` : ''}
             </span>
             {nativeBridge.isDesktopApp && !updateInfo?.available && (
@@ -550,37 +996,8 @@ export function App() {
               </button>
             )}
           </div>
-
-          {updateInfo?.available && (
-            <div className="update-bar" role="status">
-              <div className="update-bar-text">
-                <strong>Nova versão v{updateInfo.latestVersion}</strong>
-                {updateError ? (
-                  <span style={{ color: '#f3a395' }}>{updateError}</span>
-                ) : (
-                  <span>Baixa em segundos e reabre sozinho.</span>
-                )}
-              </div>
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={updating}
-                onClick={() => void handleInstallUpdate()}
-              >
-                {updating ? (
-                  <>
-                    <LoaderCircle size={14} className="spin" /> Atualizando
-                  </>
-                ) : (
-                  <>
-                    <Download size={14} /> Atualizar
-                  </>
-                )}
-              </button>
-            </div>
-          )}
-        </form>
-      </main>
+        </main>
+      </div>
     );
   }
 
@@ -675,7 +1092,7 @@ export function App() {
             <span>{shareError}</span>
           </div>
         )}
-        <button type="button" className="btn btn-primary btn-lg" onClick={handleStartShare}>
+        <button type="button" className="btn btn-primary btn-lg" onClick={() => setShareModalOpen(true)}>
           <MonitorUp size={16} /> Transmitir tela
         </button>
       </div>
@@ -684,7 +1101,7 @@ export function App() {
 
   return (
     <div
-      className={`room ${chromeHidden ? 'chrome-hidden cursor-hidden' : ''}`}
+      className={`room view-enter ${chromeHidden ? 'chrome-hidden cursor-hidden' : ''}`}
       onMouseMove={handleMouseMove}
     >
       <header className="topbar">
@@ -774,7 +1191,7 @@ export function App() {
               <Square size={13} /> Parar transmissão
             </button>
           ) : (displayStream || watchTarget) ? (
-            <button type="button" className="btn btn-primary" onClick={handleStartShare}>
+            <button type="button" className="btn btn-primary" onClick={() => setShareModalOpen(true)}>
               <MonitorUp size={15} /> Transmitir tela
             </button>
           ) : null}
@@ -1058,40 +1475,8 @@ export function App() {
                       ))}
                     </select>
                   )}
-                  <span className="field-hint">
-                    {quality.captureSource === 'dxgi-monitor'
-                      ? 'Captura direto da GPU sem congelar em tela cheia ou Alt+Tab.'
-                      : 'Abre o seletor do Windows para capturar só uma janela.'}
-                  </span>
                 </div>
               )}
-
-              <div className="field">
-                <span className="field-label">Conteúdo</span>
-                <div className="segmented" role="group" aria-label="Tipo de conteúdo">
-                  <button
-                    type="button"
-                    className="seg"
-                    aria-pressed={quality.profile === 'cinema'}
-                    onClick={() => void applyQualityChange({ profile: 'cinema' })}
-                  >
-                    Filme ou jogo
-                  </button>
-                  <button
-                    type="button"
-                    className="seg"
-                    aria-pressed={quality.profile === 'detail'}
-                    onClick={() => void applyQualityChange({ profile: 'detail' })}
-                  >
-                    Texto ou código
-                  </button>
-                </div>
-                <span className="field-hint">
-                  {quality.profile === 'cinema'
-                    ? 'Prioriza 60 fps lisos. Em jogos tela cheia (ex: Valorant), escolha a aba Tela inteira.'
-                    : 'Prioriza nitidez de letras. Em cenas rápidas pode cair o fps.'}
-                </span>
-              </div>
 
               <div className="field">
                 <span className="field-label">Resolução</span>
@@ -1144,11 +1529,6 @@ export function App() {
                   value={quality.bitrateMbps}
                   onChange={(e) => void applyQualityChange({ bitrateMbps: Number(e.target.value) })}
                 />
-                <span className="field-hint">
-                  Cada pessoa assistindo usa isso do seu upload.
-                  {peers.length > 0 &&
-                    ` Agora: cerca de ${Math.round(quality.bitrateMbps * peers.length)} Mbps.`}
-                </span>
               </div>
 
               <div className="field">
@@ -1201,12 +1581,6 @@ export function App() {
                       : 'Discord fechado. Se abrir durante a transmissão, a voz continua de fora.'}
                   </p>
                 )}
-                {quality.audioMode === 'system-all' && (
-                  <p className="note" style={{ color: 'var(--text-2)' }}>
-                    <TriangleAlert size={14} style={{ color: 'var(--banana)' }} />
-                    A voz da call do Discord vai junto e a turma escuta eco.
-                  </p>
-                )}
               </div>
 
               {localStream && quality.audioMode !== 'none' && (
@@ -1229,13 +1603,21 @@ export function App() {
                 />
                 <span>
                   Dividir o envio com quem assiste
-                  <small>Use se tiver 4 pessoas ou mais e sua internet travar. Quem assiste repassa a tela para os outros.</small>
+                  <small>Use se tiver 4 pessoas ou mais e sua internet travar.</small>
                 </span>
               </label>
             </section>
           </aside>
         )}
       </div>
+
+      <ShareModal
+        open={shareModalOpen}
+        initialQuality={quality}
+        discordDetected={discordDetected}
+        onClose={() => setShareModalOpen(false)}
+        onStartShare={startShareWithConfig}
+      />
     </div>
   );
 }

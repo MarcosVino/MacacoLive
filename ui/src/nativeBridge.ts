@@ -1,4 +1,4 @@
-import { AudioCaptureMode, AudioProcessInfo, MonitorInfo, UpdateCheckResult } from './types';
+import { AudioCaptureMode, AudioProcessInfo, CapturePreviews, MonitorInfo, UpdateCheckResult } from './types';
 
 declare global {
   interface Window {
@@ -346,6 +346,18 @@ class NativeBridge {
     if (!this.isDesktopApp) return [];
     const res = await this.callHost<{ monitors: MonitorInfo[] }>('listMonitors');
     return res?.monitors || [];
+  }
+
+  public async listCapturePreviews(): Promise<CapturePreviews> {
+    if (!this.isDesktopApp) {
+      return { monitors: [], windows: [] };
+    }
+    try {
+      return await this.callHost<CapturePreviews>('listCapturePreviews', {}, 6000);
+    } catch {
+      const mons = await this.listMonitors();
+      return { monitors: mons, windows: [] };
+    }
   }
 
   public get supportsNativeDxgiTrack(): boolean {

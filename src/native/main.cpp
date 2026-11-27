@@ -19,6 +19,7 @@
 #include "audio_loopback.h"
 #include "dxgi_capture.h"
 #include "embedded_assets.h"
+#include "preview_capture.h"
 #include "updater.h"
 
 #include <cwctype>
@@ -550,6 +551,36 @@ private:
             }
             data += L"]}";
             ReplySuccess(reqId, data);
+            return;
+        }
+
+        if (cmd == L"listCapturePreviews") {
+            std::thread([this, reqId]() {
+                auto mons = preview_helper::CaptureMonitorPreviews();
+                auto wins = preview_helper::CaptureWindowPreviews();
+                std::wstring data = L"{\"monitors\":[";
+                for (size_t i = 0; i < mons.size(); ++i) {
+                    if (i > 0) data += L",";
+                    data += L"{\"index\":" + std::to_wstring(mons[i].index) +
+                            L",\"name\":\"" + json_mini::JsonEscape(mons[i].name) +
+                            L"\",\"width\":" + std::to_wstring(mons[i].width) +
+                            L",\"height\":" + std::to_wstring(mons[i].height) +
+                            L",\"primary\":" + (mons[i].primary ? L"true" : L"false") +
+                            L",\"thumbDataUrl\":\"" + json_mini::JsonEscape(mons[i].thumbDataUrl) + L"\"}";
+                }
+                data += L"],\"windows\":[";
+                for (size_t i = 0; i < wins.size(); ++i) {
+                    if (i > 0) data += L",";
+                    data += L"{\"pid\":" + std::to_wstring(wins[i].pid) +
+                            L",\"name\":\"" + json_mini::JsonEscape(wins[i].name) +
+                            L"\",\"title\":\"" + json_mini::JsonEscape(wins[i].title) +
+                            L"\",\"iconDataUrl\":\"" + json_mini::JsonEscape(wins[i].iconDataUrl) + L"\"}";
+                }
+                data += L"]}";
+                std::wstring msg = L"{\"requestId\":\"" + json_mini::JsonEscape(reqId) +
+                                   L"\",\"data\":" + data + L"}";
+                PostJsonFromBackgroundThread(msg);
+            }).detach();
             return;
         }
 

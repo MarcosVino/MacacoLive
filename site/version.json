@@ -1,5 +1,5 @@
 {
-  "version": "1.5.1",
-  "url": "https://github.com/MarcosVino/MacacoLive/releases/download/v1.5.1/MacacoLive.exe",
-  "notes": "Captura nativa DXGI (jogos em tela cheia) e atualizador sem limite de API"
+  "version": "1.6.0",
+  "url": "https://github.com/MarcosVino/MacacoLive/releases/download/v1.6.0/MacacoLive.exe",
+  "notes": "Contas com Supabase, salas salvas estilo Discord, animações suaves e nova janela visual de compartilhar tela/aplicativo"
 }
